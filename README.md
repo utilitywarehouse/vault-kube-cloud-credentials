@@ -1,0 +1,1 @@
+# vault-kube-aws-credentials
