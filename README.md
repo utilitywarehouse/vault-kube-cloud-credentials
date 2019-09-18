@@ -5,7 +5,7 @@ service account.
 
 ## Usage
 
-Refer to [example/aws-probe.yaml] for a reference Kubernetes deployment.
+Refer to [example/aws-probe.yaml](example/aws-probe.yaml) for a reference Kubernetes deployment.
 
 ## Environment variables
 
