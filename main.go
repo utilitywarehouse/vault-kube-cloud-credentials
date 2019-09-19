@@ -87,6 +87,7 @@ var (
 	listenAddress        = os.Getenv("VKAC_LISTEN_ADDRESS")
 	kubeAuthBackendPath  = os.Getenv("VKAC_KUBE_AUTH_BACKEND_PATH")
 	kubeAuthRole         = os.Getenv("VKAC_KUBE_AUTH_ROLE")
+	kubeTokenPath        = os.Getenv("VKAC_KUBE_SA_TOKEN_PATH")
 	awsSecretBackendPath = os.Getenv("VKAC_AWS_SECRET_BACKEND_PATH")
 	awsSecretRole        = os.Getenv("VKAC_AWS_SECRET_ROLE")
 
@@ -99,6 +100,9 @@ func validate() {
 	}
 	if kubeAuthBackendPath == "" {
 		kubeAuthBackendPath = "kubernetes"
+	}
+	if kubeTokenPath == "" {
+		kubeTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	}
 	if awsSecretRole == "" {
 		log.Fatalf("error: %s", "VKAC_AWS_SECRET_ROLE must be set")
@@ -121,7 +125,7 @@ func main() {
 	}
 
 	// Login with the SA token
-	jwt, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
+	jwt, err := ioutil.ReadFile(kubeTokenPath)
 	if err != nil {
 		log.Fatalf("error reading serviceaccount token: %v", err)
 	}

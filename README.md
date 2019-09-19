@@ -20,6 +20,7 @@ Optional:
 
 - `VKAC_AWS_SECRET_BACKEND_PATH`: path of the aws secret backend (default: `aws`)
 - `VKAC_KUBE_AUTH_BACKEND_PATH`: path of the kubernetes auth backend (default: `kubernetes`)
+- `VKAC_KUBE_SA_TOKEN_PATH`: path to a file containing the Kubernetes service account token (default: `/var/run/secrets/kubernetes.io/serviceaccount/token`)
 - `VKAC_LISTEN_ADDRESS`: address to bind to (default: `127.0.0.1:8000`)
 
 Additionally, you can use any of the [environment variables supported by the Vault
