@@ -16,8 +16,6 @@ var (
 	kubeAuthBackend  = os.Getenv("VKAC_KUBE_AUTH_BACKEND")
 	kubeAuthRole     = os.Getenv("VKAC_KUBE_AUTH_ROLE")
 	kubeTokenPath    = os.Getenv("VKAC_KUBE_SA_TOKEN_PATH")
-
-	latestCredentials = &AWSCredentials{}
 )
 
 func validate() {

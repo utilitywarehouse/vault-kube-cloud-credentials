@@ -37,7 +37,7 @@ func (lr *LoginRenewer) Start() {
 func (lr *LoginRenewer) login() (time.Duration, error) {
 	jwt, err := ioutil.ReadFile(lr.TokenPath)
 	if err != nil {
-		return time.Nanosecond - 1, err
+		return time.Duration(0), err
 	}
 
 	secret, err := lr.Client.Logical().Write("auth/"+lr.AuthBackend+"/login", map[string]interface{}{
@@ -46,7 +46,7 @@ func (lr *LoginRenewer) login() (time.Duration, error) {
 	})
 	if err != nil {
 		log.Printf("error: %v", err)
-		return time.Nanosecond - 1, err
+		return time.Duration(0), err
 	}
 
 	lr.Client.SetToken(secret.Auth.ClientToken)
