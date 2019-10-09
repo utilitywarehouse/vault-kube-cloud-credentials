@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"time"
@@ -61,7 +63,10 @@ func (cr *CredentialsRenewer) Start() {
 			}
 			resp, err := cr.Client.RawRequest(req)
 			if err == nil {
-				defer resp.Body.Close()
+				defer func() {
+					io.Copy(ioutil.Discard, resp.Body)
+					resp.Body.Close()
+				}()
 			} else {
 				cr.Errors <- err
 				return
