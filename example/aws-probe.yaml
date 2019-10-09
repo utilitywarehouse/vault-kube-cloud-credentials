@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aws-probe
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: aws-probe
+spec:
+  replicas: 1
+  template:
+    spec:
+      serviceAccountName: aws-probe
+      containers:
+        - name: aws-credentials
+          image: quay.io/utilitywarehouse/vault-kube-aws-credentials:1.0.0
+          env:
+            - name: VAULT_ADDR
+              value: "https://vault.example-namespace:8200"
+            - name: VAULT_CACERT
+              value: "/etc/tls/ca.crt"
+            - name: POD_SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: VKAC_KUBE_AUTH_ROLE
+              value: "$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
+            - name: VKAC_AWS_SECRET_ROLE
+              value: "$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
+          volumeMounts:
+            - name: vault-tls
+              mountPath: /etc/tls
+        - name: aws-probe
+          image: mesosphere/aws-cli
+          command:
+            - ash
+            - -c
+            - |
+              while true; do
+                aws sts get-caller-identity
+                sleep 600
+              done
+          env:
+            - name: AWS_CONTAINER_CREDENTIALS_FULL_URI
+              value: "http://127.0.0.1:8000/credentials"
+            - name: AWS_REGION
+              value: "eu-west-1"
+      volumes:
+        - name: vault-tls
+          configMap:
+            name: vault-tls
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: vault-tls
+data:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    -----END CERTIFICATE-----
