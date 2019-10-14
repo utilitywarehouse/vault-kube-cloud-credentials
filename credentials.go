@@ -77,7 +77,7 @@ func (cr *CredentialsRenewer) Start() {
 				return
 			}
 
-			log.Printf("credentials: %v", secret.Data["access_key"].(string))
+			log.Printf("new aws credentials: %v, expiring %v", secret.Data["access_key"].(string), l.Data.ExpireTime.Format("2006-01-02 15:04:05"))
 
 			// Send the new credentials down the channel
 			cr.Credentials <- &AWSCredentials{
@@ -88,7 +88,9 @@ func (cr *CredentialsRenewer) Start() {
 			}
 
 			// Sleep until its time to renew the creds
-			time.Sleep(sleepDuration(leaseDuration, cr.Rand))
+			sd := sleepDuration(leaseDuration, cr.Rand)
+			log.Printf("credentials renewer sleeping for: %v", sd)
+			time.Sleep(sd)
 		}
 	}
 }

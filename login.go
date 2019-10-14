@@ -51,6 +51,6 @@ func (lr *LoginRenewer) login() (time.Duration, error) {
 
 	lr.Client.SetToken(secret.Auth.ClientToken)
 
-	log.Printf("login: lease duration: %v", secret.Auth.LeaseDuration)
+	log.Printf("new vault login: lease duration: %vs", secret.Auth.LeaseDuration)
 	return time.Duration(secret.Auth.LeaseDuration) * time.Second, nil
 }
