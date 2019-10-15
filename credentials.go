@@ -77,7 +77,7 @@ func (cr *CredentialsRenewer) Start() {
 				return
 			}
 
-			log.Printf("credentials: %v", secret.Data["access_key"].(string))
+			log.Printf("new aws credentials: %s, expiring %s", secret.Data["access_key"].(string), l.Data.ExpireTime.Format("2006-01-02 15:04:05"))
 
 			// Send the new credentials down the channel
 			cr.Credentials <- &AWSCredentials{
