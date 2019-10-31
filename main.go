@@ -6,37 +6,42 @@ import (
 )
 
 var (
-	appNamespace     = os.Getenv("VKAC_APP_NAMESPACE")
-	appSA            = os.Getenv("VKAC_APP_SA")
-	awsSecretsEngine = os.Getenv("VKAC_AWS_SECRETS_ENGINE")
-	kubeAuthMethod   = os.Getenv("VKAC_KUBE_AUTH_METHOD")
-	kubeSATokenPath  = os.Getenv("VKAC_KUBE_SA_TOKEN_PATH")
-	listenAddress    = os.Getenv("VKAC_LISTEN_ADDRESS")
+	awsPath    = os.Getenv("VKAC_AWS_SECRET_BACKEND_PATH")
+	awsRole    = os.Getenv("VKAC_AWS_SECRET_ROLE")
+	kubePath   = os.Getenv("VKAC_KUBE_AUTH_BACKEND_PATH")
+	kubeRole   = os.Getenv("VKAC_KUBE_AUTH_ROLE")
+	tokenPath  = os.Getenv("VKAC_KUBE_SA_TOKEN_PATH")
+	listenHost = os.Getenv("VKAC_LISTEN_HOST")
+	listenPort = os.Getenv("VKAC_LISTEN_PORT")
 )
 
 func validate() {
-	if len(appNamespace) == 0 {
-		log.Fatalf("error: must set VKAC_APP_NAMESPACE")
+	if len(awsRole) == 0 {
+		log.Fatalf("error: must set VKAC_AWS_SECRET_ROLE")
 	}
 
-	if len(appSA) == 0 {
-		log.Fatalf("error: must set VKAC_APP_SA")
+	if len(kubeRole) == 0 {
+		log.Fatalf("error: must set VKAC_KUBE_AUTH_ROLE")
 	}
 
-	if len(awsSecretsEngine) == 0 {
-		awsSecretsEngine = "aws"
+	if len(awsPath) == 0 {
+		awsPath = "aws"
 	}
 
-	if len(kubeAuthMethod) == 0 {
-		kubeAuthMethod = "kubernetes"
+	if len(kubePath) == 0 {
+		kubePath = "kubernetes"
 	}
 
-	if len(kubeSATokenPath) == 0 {
-		kubeSATokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	if len(tokenPath) == 0 {
+		tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	}
 
-	if len(listenAddress) == 0 {
-		listenAddress = "127.0.0.1:8000"
+	if len(listenHost) == 0 {
+		listenHost = "127.0.0.1"
+	}
+
+	if len(listenPort) == 0 {
+		listenPort = "8000"
 	}
 }
 
@@ -49,17 +54,17 @@ func main() {
 	// This channel communicates changes in credentials between the credentials renewer and the webserver
 	creds := make(chan *AWSCredentials)
 
-	// Identifier used in vault roles
-	vaultRolesName := appNamespace + "-" + appSA
+	listenAddress := listenHost + ":" + listenPort
 
 	// Keep credentials up to date
 	credentialsRenewer := &CredentialsRenewer{
-		Credentials:   creds,
-		Errors:        errors,
-		Role:          vaultRolesName,
-		SecretsEngine: awsSecretsEngine,
-		AuthMethod:    kubeAuthMethod,
-		TokenPath:     kubeSATokenPath,
+		Credentials: creds,
+		Errors:      errors,
+		AwsPath:     awsPath,
+		AwsRole:     awsRole,
+		KubePath:    kubePath,
+		KubeRole:    kubeRole,
+		TokenPath:   tokenPath,
 	}
 
 	// Serve the credentials

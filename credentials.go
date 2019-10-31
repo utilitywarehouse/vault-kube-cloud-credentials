@@ -28,12 +28,13 @@ type lease struct {
 
 // CredentialsRenewer renews the credentials
 type CredentialsRenewer struct {
-	Credentials   chan<- *AWSCredentials
-	Errors        chan<- error
-	Role          string
-	SecretsEngine string
-	AuthMethod    string
-	TokenPath     string
+	Credentials chan<- *AWSCredentials
+	Errors      chan<- error
+	AwsPath     string
+	AwsRole     string
+	KubePath    string
+	KubeRole    string
+	TokenPath   string
 }
 
 // Start the renewer
@@ -52,9 +53,9 @@ func (cr *CredentialsRenewer) Start() {
 			cr.Errors <- err
 			return
 		}
-		secret, err := client.Logical().Write("auth/"+cr.AuthMethod+"/login", map[string]interface{}{
+		secret, err := client.Logical().Write("auth/"+cr.KubePath+"/login", map[string]interface{}{
 			"jwt":  string(jwt),
-			"role": cr.Role,
+			"role": cr.KubeRole,
 		})
 		if err != nil {
 			cr.Errors <- err
@@ -63,7 +64,7 @@ func (cr *CredentialsRenewer) Start() {
 		client.SetToken(secret.Auth.ClientToken)
 
 		// Get a credentials secret from vault for the role
-		secret, err = client.Logical().Read(cr.SecretsEngine + "/sts/" + cr.Role)
+		secret, err = client.Logical().Read(cr.AwsPath + "/sts/" + cr.AwsRole)
 		if err != nil {
 			cr.Errors <- err
 			return
