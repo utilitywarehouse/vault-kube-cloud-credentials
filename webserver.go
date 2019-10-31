@@ -9,8 +9,9 @@ import (
 
 // Webserver serves the credentials
 type Webserver struct {
-	Credentials <-chan *AWSCredentials
-	Errors      chan<- error
+	Credentials   <-chan *AWSCredentials
+	Errors        chan<- error
+	ListenAddress string
 }
 
 // Start the webserver
@@ -39,6 +40,6 @@ func (w *Webserver) Start() {
 		enc.Encode(latestCredentials)
 	})
 
-	log.Printf("Listening on %s", listenAddress)
-	w.Errors <- http.ListenAndServe(listenAddress, nil)
+	log.Printf("Listening on %s", w.ListenAddress)
+	w.Errors <- http.ListenAndServe(w.ListenAddress, nil)
 }

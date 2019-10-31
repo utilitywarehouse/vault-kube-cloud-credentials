@@ -2,59 +2,51 @@ package main
 
 import (
 	"log"
-	"math/rand"
 	"os"
-	"time"
-
-	vault "github.com/hashicorp/vault/api"
 )
 
 var (
-	listenAddress    = os.Getenv("VKAC_LISTEN_ADDRESS")
-	awsSecretBackend = os.Getenv("VKAC_AWS_SECRET_BACKEND")
-	awsSecretRole    = os.Getenv("VKAC_AWS_SECRET_ROLE")
-	kubeAuthBackend  = os.Getenv("VKAC_KUBE_AUTH_BACKEND")
-	kubeAuthRole     = os.Getenv("VKAC_KUBE_AUTH_ROLE")
-	kubeTokenPath    = os.Getenv("VKAC_KUBE_SA_TOKEN_PATH")
+	awsPath    = os.Getenv("VKAC_AWS_SECRET_BACKEND_PATH")
+	awsRole    = os.Getenv("VKAC_AWS_SECRET_ROLE")
+	kubePath   = os.Getenv("VKAC_KUBE_AUTH_BACKEND_PATH")
+	kubeRole   = os.Getenv("VKAC_KUBE_AUTH_ROLE")
+	tokenPath  = os.Getenv("VKAC_KUBE_SA_TOKEN_PATH")
+	listenHost = os.Getenv("VKAC_LISTEN_HOST")
+	listenPort = os.Getenv("VKAC_LISTEN_PORT")
 )
 
 func validate() {
-	if len(awsSecretBackend) == 0 {
-		awsSecretBackend = "aws"
-	}
-
-	if len(awsSecretRole) == 0 {
+	if len(awsRole) == 0 {
 		log.Fatalf("error: must set VKAC_AWS_SECRET_ROLE")
 	}
 
-	if len(kubeAuthRole) == 0 {
+	if len(kubeRole) == 0 {
 		log.Fatalf("error: must set VKAC_KUBE_AUTH_ROLE")
 	}
 
-	if len(kubeAuthBackend) == 0 {
-		kubeAuthBackend = "kubernetes"
+	if len(awsPath) == 0 {
+		awsPath = "aws"
 	}
 
-	if len(kubeTokenPath) == 0 {
-		kubeTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	if len(kubePath) == 0 {
+		kubePath = "kubernetes"
 	}
 
-	if len(listenAddress) == 0 {
-		listenAddress = "127.0.0.1:8000"
+	if len(tokenPath) == 0 {
+		tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	}
+
+	if len(listenHost) == 0 {
+		listenHost = "127.0.0.1"
+	}
+
+	if len(listenPort) == 0 {
+		listenPort = "8000"
 	}
 }
 
 func main() {
 	validate()
-
-	// Vault client
-	client, err := vault.NewClient(vault.DefaultConfig())
-	if err != nil {
-		log.Fatalf("error creating vault client: %v", err)
-	}
-
-	// Used to generate random values for sleeping between renewals
-	random := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
 
 	// Channel for goroutines to send errors to
 	errors := make(chan error)
@@ -62,33 +54,26 @@ func main() {
 	// This channel communicates changes in credentials between the credentials renewer and the webserver
 	creds := make(chan *AWSCredentials)
 
-	// Login, and stay logged in
-	loginRenewer := &LoginRenewer{
-		AuthBackend: kubeAuthBackend,
-		Client:      client,
-		Errors:      errors,
-		Role:        kubeAuthRole,
-		Rand:        random,
-		TokenPath:   kubeTokenPath,
-	}
+	listenAddress := listenHost + ":" + listenPort
 
 	// Keep credentials up to date
 	credentialsRenewer := &CredentialsRenewer{
-		Client:         client,
-		Credentials:    creds,
-		Errors:         errors,
-		Role:           awsSecretRole,
-		Rand:           random,
-		SecretsBackend: awsSecretBackend,
+		Credentials: creds,
+		Errors:      errors,
+		AwsPath:     awsPath,
+		AwsRole:     awsRole,
+		KubePath:    kubePath,
+		KubeRole:    kubeRole,
+		TokenPath:   tokenPath,
 	}
 
 	// Serve the credentials
 	webserver := &Webserver{
-		Credentials: creds,
-		Errors:      errors,
+		Credentials:   creds,
+		Errors:        errors,
+		ListenAddress: listenAddress,
 	}
 
-	go loginRenewer.Start()
 	go credentialsRenewer.Start()
 	go webserver.Start()
 

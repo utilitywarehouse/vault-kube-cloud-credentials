@@ -28,67 +28,89 @@ type lease struct {
 
 // CredentialsRenewer renews the credentials
 type CredentialsRenewer struct {
-	Client         *vault.Client
-	Credentials    chan<- *AWSCredentials
-	Errors         chan<- error
-	Rand           *rand.Rand
-	Role           string
-	SecretsBackend string
+	Credentials chan<- *AWSCredentials
+	Errors      chan<- error
+	AwsPath     string
+	AwsRole     string
+	KubePath    string
+	KubeRole    string
+	TokenPath   string
 }
 
 // Start the renewer
 func (cr *CredentialsRenewer) Start() {
 	for {
-		// A token is required to authenticate, this should be set by the login renewer
-		if len(cr.Client.Token()) > 0 {
-			l := lease{}
-
-			// Get a credentials secret from vault for the role
-			secret, err := cr.Client.Logical().Read(cr.SecretsBackend + "/sts/" + cr.Role)
-			if err != nil {
-				cr.Errors <- err
-				return
-			}
-
-			// Convert the secret's lease duration into a time.Duration
-			leaseDuration := time.Duration(secret.LeaseDuration) * time.Second
-
-			// Get the expiration date of the lease from vault
-			req := cr.Client.NewRequest("PUT", "/v1/sys/leases/lookup")
-			if err = req.SetJSONBody(map[string]interface{}{
-				"lease_id": secret.LeaseID,
-			}); err != nil {
-				cr.Errors <- err
-				return
-			}
-			resp, err := cr.Client.RawRequest(req)
-			if err == nil {
-				defer func() {
-					io.Copy(ioutil.Discard, resp.Body)
-					resp.Body.Close()
-				}()
-			} else {
-				cr.Errors <- err
-				return
-			}
-			err = json.NewDecoder(resp.Body).Decode(&l)
-			if err != nil {
-				cr.Errors <- err
-				return
-			}
-
-			log.Printf("new aws credentials: %s, expiring %s", secret.Data["access_key"].(string), l.Data.ExpireTime.Format("2006-01-02 15:04:05"))
-
-			// Send the new credentials down the channel
-			cr.Credentials <- &AWSCredentials{
-				AccessKeyID:     secret.Data["access_key"].(string),
-				SecretAccessKey: secret.Data["secret_key"].(string),
-				Token:           secret.Data["security_token"].(string),
-				Expiration:      l.Data.ExpireTime,
-			}
-
-			// Sleep until its time to renew the creds
-			time.Sleep(sleepDuration(leaseDuration, cr.Rand))
+		// Create Vault client
+		client, err := vault.NewClient(vault.DefaultConfig())
+		if err != nil {
+			cr.Errors <- err
+			return
 		}
+
+		// Login into Vault via kube SA
+		jwt, err := ioutil.ReadFile(cr.TokenPath)
+		if err != nil {
+			cr.Errors <- err
+			return
+		}
+		secret, err := client.Logical().Write("auth/"+cr.KubePath+"/login", map[string]interface{}{
+			"jwt":  string(jwt),
+			"role": cr.KubeRole,
+		})
+		if err != nil {
+			cr.Errors <- err
+			return
+		}
+		client.SetToken(secret.Auth.ClientToken)
+
+		// Get a credentials secret from vault for the role
+		secret, err = client.Logical().Read(cr.AwsPath + "/sts/" + cr.AwsRole)
+		if err != nil {
+			cr.Errors <- err
+			return
+		}
+
+		// Convert the secret's lease duration into a time.Duration
+		leaseDuration := time.Duration(secret.LeaseDuration) * time.Second
+
+		// Get the expiration date of the lease from vault
+		l := lease{}
+		req := client.NewRequest("PUT", "/v1/sys/leases/lookup")
+		if err = req.SetJSONBody(map[string]interface{}{
+			"lease_id": secret.LeaseID,
+		}); err != nil {
+			cr.Errors <- err
+			return
+		}
+		resp, err := client.RawRequest(req)
+		if err == nil {
+			defer func() {
+				io.Copy(ioutil.Discard, resp.Body)
+				resp.Body.Close()
+			}()
+		} else {
+			cr.Errors <- err
+			return
+		}
+		err = json.NewDecoder(resp.Body).Decode(&l)
+		if err != nil {
+			cr.Errors <- err
+			return
+		}
+
+		log.Printf("new aws credentials: %s, expiring %s", secret.Data["access_key"].(string), l.Data.ExpireTime.Format("2006-01-02 15:04:05"))
+
+		// Send the new credentials down the channel
+		cr.Credentials <- &AWSCredentials{
+			AccessKeyID:     secret.Data["access_key"].(string),
+			SecretAccessKey: secret.Data["secret_key"].(string),
+			Token:           secret.Data["security_token"].(string),
+			Expiration:      l.Data.ExpireTime,
+		}
+		// Used to generate random values for sleeping between renewals
+		random := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
+
+		// Sleep until its time to renew the creds
+		time.Sleep(sleepDuration(leaseDuration, random))
 	}
 }
