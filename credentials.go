@@ -35,14 +35,21 @@ type CredentialsRenewer struct {
 	KubePath    string
 	KubeRole    string
 	TokenPath   string
+	VaultConfig *vault.Config
 }
 
 // Start the renewer
 func (cr *CredentialsRenewer) Start() {
+	// Create Vault client
+	client, err := vault.NewClient(cr.VaultConfig)
+	if err != nil {
+		cr.Errors <- err
+		return
+	}
+
 	for {
-		// Create Vault client
-		client, err := vault.NewClient(vault.DefaultConfig())
-		if err != nil {
+		// Reload vault configuration from the environment
+		if err := cr.VaultConfig.ReadEnvironment(); err != nil {
 			cr.Errors <- err
 			return
 		}
@@ -83,16 +90,13 @@ func (cr *CredentialsRenewer) Start() {
 			return
 		}
 		resp, err := client.RawRequest(req)
-		if err == nil {
-			defer func() {
-				io.Copy(ioutil.Discard, resp.Body)
-				resp.Body.Close()
-			}()
-		} else {
+		if err != nil {
 			cr.Errors <- err
 			return
 		}
 		err = json.NewDecoder(resp.Body).Decode(&l)
+		io.Copy(ioutil.Discard, resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			cr.Errors <- err
 			return

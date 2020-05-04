@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"os"
+
+	vault "github.com/hashicorp/vault/api"
 )
 
 var (
@@ -65,6 +67,7 @@ func main() {
 		KubePath:    kubePath,
 		KubeRole:    kubeRole,
 		TokenPath:   tokenPath,
+		VaultConfig: vault.DefaultConfig(),
 	}
 
 	// Serve the credentials
