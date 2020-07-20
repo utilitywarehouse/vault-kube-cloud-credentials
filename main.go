@@ -10,6 +10,8 @@ import (
 var (
 	awsPath    = os.Getenv("VKAC_AWS_SECRET_BACKEND_PATH")
 	awsRole    = os.Getenv("VKAC_AWS_SECRET_ROLE")
+	gcpPath    = os.Getenv("VKAC_GCP_SECRET_BACKEND_PATH")
+	gcpRoleSet = os.Getenv("VKAC_GCP_SECRET_ROLESET")
 	kubePath   = os.Getenv("VKAC_KUBE_AUTH_BACKEND_PATH")
 	kubeRole   = os.Getenv("VKAC_KUBE_AUTH_ROLE")
 	tokenPath  = os.Getenv("VKAC_KUBE_SA_TOKEN_PATH")
@@ -18,8 +20,9 @@ var (
 )
 
 func validate() {
-	if len(awsRole) == 0 {
-		log.Fatalf("error: must set VKAC_AWS_SECRET_ROLE")
+	if (len(awsRole) == 0 && len(gcpRoleSet) == 0) ||
+		(len(awsRole) > 0 && len(gcpRoleSet) > 0) {
+		log.Fatalf("error: must set either VKAC_AWS_SECRET_ROLE or VKAC_GCP_SECRET_ROLESET")
 	}
 
 	if len(kubeRole) == 0 {
@@ -28,6 +31,10 @@ func validate() {
 
 	if len(awsPath) == 0 {
 		awsPath = "aws"
+	}
+
+	if len(gcpPath) == 0 {
+		gcpPath = "gcp"
 	}
 
 	if len(kubePath) == 0 {
@@ -54,27 +61,42 @@ func main() {
 	errors := make(chan error)
 
 	// This channel communicates changes in credentials between the credentials renewer and the webserver
-	creds := make(chan *AWSCredentials)
+	creds := make(chan interface{})
 
 	listenAddress := listenHost + ":" + listenPort
 
+	var providerConfig ProviderConfig
+	if len(awsRole) > 0 {
+		providerConfig = &AWSProviderConfig{
+			AwsPath: awsPath,
+			AwsRole: awsRole,
+		}
+	} else if len(gcpRoleSet) > 0 {
+		providerConfig = &GCPProviderConfig{
+			GcpPath:    gcpPath,
+			GcpRoleSet: gcpRoleSet,
+		}
+	} else {
+		log.Fatalf("could not determine cloud provider")
+	}
+
 	// Keep credentials up to date
 	credentialsRenewer := &CredentialsRenewer{
-		Credentials: creds,
-		Errors:      errors,
-		AwsPath:     awsPath,
-		AwsRole:     awsRole,
-		KubePath:    kubePath,
-		KubeRole:    kubeRole,
-		TokenPath:   tokenPath,
-		VaultConfig: vault.DefaultConfig(),
+		Credentials:    creds,
+		Errors:         errors,
+		KubePath:       kubePath,
+		KubeRole:       kubeRole,
+		ProviderConfig: providerConfig,
+		TokenPath:      tokenPath,
+		VaultConfig:    vault.DefaultConfig(),
 	}
 
 	// Serve the credentials
 	webserver := &Webserver{
-		Credentials:   creds,
-		Errors:        errors,
-		ListenAddress: listenAddress,
+		Credentials:     creds,
+		CredentialsPath: providerConfig.CredentialsPath(),
+		Errors:          errors,
+		ListenAddress:   listenAddress,
 	}
 
 	go credentialsRenewer.Start()
