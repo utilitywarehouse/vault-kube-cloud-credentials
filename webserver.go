@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	appName        = "vault-kube-credentials"
+	appName        = "vault-kube-cloud-credentials"
 	appDescription = "Fetch cloud provider credentials from vault on behalf of a Kubernetes service account and serve them via HTTP."
 )
 
@@ -48,7 +48,7 @@ func (w *Webserver) Start() {
 		ReadyAlways()),
 	)
 
-	// Serve credentials at /credentials
+	// Serve credentials at the appropriate path for the provider
 	http.HandleFunc(w.CredentialsPath, func(w http.ResponseWriter, r *http.Request) {
 		lock.RLock()
 		defer lock.RUnlock()
