@@ -11,15 +11,16 @@ import (
 )
 
 const (
-	appName        = "vault-kube-aws-credentials"
-	appDescription = "Fetch AWS credentials from vault on behalf of a Kubernetes service account and serve them via HTTP."
+	appName        = "vault-kube-cloud-credentials"
+	appDescription = "Fetch cloud provider credentials from vault on behalf of a Kubernetes service account and serve them via HTTP."
 )
 
 // Webserver serves the credentials
 type Webserver struct {
-	Credentials   <-chan *AWSCredentials
-	Errors        chan<- error
-	ListenAddress string
+	Credentials     <-chan interface{}
+	CredentialsPath string
+	Errors          chan<- error
+	ListenAddress   string
 }
 
 // Start the webserver
@@ -34,7 +35,7 @@ func (w *Webserver) Start() {
 		for {
 			select {
 			case c := <-w.Credentials:
-				log.Printf("webserver: received credentials: %s", c.AccessKeyID)
+				log.Printf("webserver: received credentials")
 				latestCredentials = c
 			}
 		}
@@ -47,8 +48,8 @@ func (w *Webserver) Start() {
 		ReadyAlways()),
 	)
 
-	// Serve credentials at /credentials
-	http.HandleFunc("/credentials", func(w http.ResponseWriter, r *http.Request) {
+	// Serve credentials at the appropriate path for the provider
+	http.HandleFunc(w.CredentialsPath, func(w http.ResponseWriter, r *http.Request) {
 		lock.RLock()
 		defer lock.RUnlock()
 		enc := json.NewEncoder(w)
