@@ -1,4 +1,4 @@
-module github.com/utilitywarehouse/vault-kube-aws-credentials
+module github.com/utilitywarehouse/vault-kube-cloud-credentials
 
 go 1.13
 
