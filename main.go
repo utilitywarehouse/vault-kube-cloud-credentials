@@ -95,10 +95,10 @@ func main() {
 
 	// Serve the credentials
 	webserver := &Webserver{
-		Credentials:     creds,
-		CredentialsPath: providerConfig.CredentialsPath(),
-		Errors:          errors,
-		ListenAddress:   listenAddress,
+		Credentials:    creds,
+		ProviderConfig: providerConfig,
+		Errors:         errors,
+		ListenAddress:  listenAddress,
 	}
 
 	go credentialsRenewer.Start()

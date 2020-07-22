@@ -6,8 +6,10 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	vault "github.com/hashicorp/vault/api"
 )
 
@@ -15,6 +17,7 @@ type ProviderConfig interface {
 	CredentialsPath() string
 	GetCredentials(client *vault.Client) (interface{}, time.Duration, error)
 	SecretPath() string
+	SetupAdditionalEndpoints(r *mux.Router)
 }
 
 // AWSCredentials are the credentials served by the API
@@ -77,6 +80,8 @@ func (apc *AWSProviderConfig) SecretPath() string {
 	return apc.AwsPath + "/sts/" + apc.AwsRole
 }
 
+func (apc *AWSProviderConfig) SetupAdditionalEndpoints(r *mux.Router) {}
+
 // GCPCredentials are the credentials served by the API
 type GCPCredentials struct {
 	AccessToken  string `json:"access_token"`
@@ -125,6 +130,21 @@ func (gpc *GCPProviderConfig) GetCredentials(client *vault.Client) (interface{},
 
 func (gpc *GCPProviderConfig) SecretPath() string {
 	return gpc.GcpPath + "/token/" + gpc.GcpRoleSet
+}
+
+func (apc *GCPProviderConfig) SetupAdditionalEndpoints(r *mux.Router) {
+	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if v := r.Form["recursive"]; len(v) != 1 || v[0] != "true" {
+			w.WriteHeader(http.StatusNotImplemented)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"aliases":["default"],"email":"default","scopes":[]}`))
+	})
 }
 
 // lease represents the part of the response from /v1/sys/leases/lookup we care about (the expire time)

@@ -18,10 +18,10 @@ const (
 
 // Webserver serves the credentials
 type Webserver struct {
-	Credentials     <-chan interface{}
-	CredentialsPath string
-	Errors          chan<- error
-	ListenAddress   string
+	Credentials    <-chan interface{}
+	ProviderConfig ProviderConfig
+	Errors         chan<- error
+	ListenAddress  string
 }
 
 // Start the webserver
@@ -52,12 +52,15 @@ func (w *Webserver) Start() {
 	)
 
 	// Serve credentials at the appropriate path for the provider
-	r.HandleFunc(w.CredentialsPath, func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc(w.ProviderConfig.CredentialsPath(), func(w http.ResponseWriter, r *http.Request) {
 		lock.RLock()
 		defer lock.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
 		enc := json.NewEncoder(w)
 		enc.Encode(latestCredentials)
 	})
+
+	w.ProviderConfig.SetupAdditionalEndpoints(r)
 
 	log.Printf("Listening on %s", w.ListenAddress)
 	w.Errors <- http.ListenAndServe(w.ListenAddress, r)
