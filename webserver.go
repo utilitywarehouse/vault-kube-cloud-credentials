@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/gorilla/mux"
 	"github.com/utilitywarehouse/go-operational/op"
 )
 
@@ -41,15 +42,17 @@ func (w *Webserver) Start() {
 		}
 	}()
 
+	r := mux.NewRouter()
+
 	// Add operational endpoints
-	http.Handle("/__/", op.NewHandler(op.NewStatus(appName, appDescription).
+	r.Handle("/__/", op.NewHandler(op.NewStatus(appName, appDescription).
 		AddOwner("system", "#infra").
 		AddLink("readme", fmt.Sprintf("https://github.com/utilitywarehouse/%s/blob/master/README.md", appName)).
 		ReadyAlways()),
 	)
 
 	// Serve credentials at the appropriate path for the provider
-	http.HandleFunc(w.CredentialsPath, func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc(w.CredentialsPath, func(w http.ResponseWriter, r *http.Request) {
 		lock.RLock()
 		defer lock.RUnlock()
 		enc := json.NewEncoder(w)
@@ -57,5 +60,5 @@ func (w *Webserver) Start() {
 	})
 
 	log.Printf("Listening on %s", w.ListenAddress)
-	w.Errors <- http.ListenAndServe(w.ListenAddress, nil)
+	w.Errors <- http.ListenAndServe(w.ListenAddress, r)
 }

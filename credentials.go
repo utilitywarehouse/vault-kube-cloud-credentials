@@ -92,7 +92,7 @@ type GCPProviderConfig struct {
 func (gpc *GCPProviderConfig) CredentialsPath() string {
 	// https://github.com/googleapis/google-cloud-go/blob/master/compute/metadata/metadata.go#L299
 	// https://github.com/golang/oauth2/blob/master/google/google.go#L175
-	return "/computeMetadata/v1/instance/service-accounts/default/token"
+	return "/computeMetadata/v1/instance/service-accounts/{service_account}/token"
 }
 
 func (gpc *GCPProviderConfig) GetCredentials(client *vault.Client) (interface{}, time.Duration, error) {

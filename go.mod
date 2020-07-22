@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/frankban/quicktest v1.9.0 // indirect
 	github.com/golang/protobuf v1.4.1 // indirect
+	github.com/gorilla/mux v1.7.4
 	github.com/hashicorp/go-multierror v1.1.0 // indirect
 	github.com/hashicorp/go-retryablehttp v0.6.6 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
