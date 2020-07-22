@@ -71,11 +71,13 @@ func main() {
 			AwsPath: awsPath,
 			AwsRole: awsRole,
 		}
+		log.Printf("using AWS secrets engine")
 	} else if len(gcpRoleSet) > 0 {
 		providerConfig = &GCPProviderConfig{
 			GcpPath:    gcpPath,
 			GcpRoleSet: gcpRoleSet,
 		}
+		log.Printf("using GCP secrets engine")
 	} else {
 		log.Fatalf("could not determine cloud provider")
 	}
@@ -93,10 +95,10 @@ func main() {
 
 	// Serve the credentials
 	webserver := &Webserver{
-		Credentials:     creds,
-		CredentialsPath: providerConfig.CredentialsPath(),
-		Errors:          errors,
-		ListenAddress:   listenAddress,
+		Credentials:    creds,
+		ProviderConfig: providerConfig,
+		Errors:         errors,
+		ListenAddress:  listenAddress,
 	}
 
 	go credentialsRenewer.Start()

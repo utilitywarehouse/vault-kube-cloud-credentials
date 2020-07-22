@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/gorilla/mux"
 	"github.com/utilitywarehouse/go-operational/op"
 )
 
@@ -17,10 +18,10 @@ const (
 
 // Webserver serves the credentials
 type Webserver struct {
-	Credentials     <-chan interface{}
-	CredentialsPath string
-	Errors          chan<- error
-	ListenAddress   string
+	Credentials    <-chan interface{}
+	ProviderConfig ProviderConfig
+	Errors         chan<- error
+	ListenAddress  string
 }
 
 // Start the webserver
@@ -41,21 +42,26 @@ func (w *Webserver) Start() {
 		}
 	}()
 
+	r := mux.NewRouter()
+
 	// Add operational endpoints
-	http.Handle("/__/", op.NewHandler(op.NewStatus(appName, appDescription).
+	r.Handle("/__/", op.NewHandler(op.NewStatus(appName, appDescription).
 		AddOwner("system", "#infra").
 		AddLink("readme", fmt.Sprintf("https://github.com/utilitywarehouse/%s/blob/master/README.md", appName)).
 		ReadyAlways()),
 	)
 
 	// Serve credentials at the appropriate path for the provider
-	http.HandleFunc(w.CredentialsPath, func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc(w.ProviderConfig.CredentialsPath(), func(w http.ResponseWriter, r *http.Request) {
 		lock.RLock()
 		defer lock.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
 		enc := json.NewEncoder(w)
 		enc.Encode(latestCredentials)
 	})
 
+	w.ProviderConfig.SetupAdditionalEndpoints(r)
+
 	log.Printf("Listening on %s", w.ListenAddress)
-	w.Errors <- http.ListenAndServe(w.ListenAddress, nil)
+	w.Errors <- http.ListenAndServe(w.ListenAddress, r)
 }

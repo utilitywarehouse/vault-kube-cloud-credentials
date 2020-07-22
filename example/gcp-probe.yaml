@@ -1,25 +1,25 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: aws-probe
+  name: gcp-probe
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: aws-probe
+  name: gcp-probe
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: aws-probe
+      app: gcp-probe
   template:
     metadata:
       labels:
-        app: aws-probe
+        app: gcp-probe
     spec:
-      serviceAccountName: aws-probe
+      serviceAccountName: gcp-probe
       containers:
-        - name: aws-credentials
+        - name: gcp-credentials
           image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.2.1
           env:
             - name: VAULT_ADDR
@@ -34,28 +34,30 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            # This value corresponds to the this variable:
+            # https://github.com/utilitywarehouse/tf_kube_creds_provider_via_vault/blob/master/gcp/variables.tf#L1-L3
+            - name: ENVIRONMENT
+              value: exp-1
             - name: VKAC_KUBE_AUTH_ROLE
-              value: "$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
-            - name: VKAC_AWS_SECRET_ROLE
-              value: "$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
+              value: "$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
+            - name: VKAC_GCP_SECRET_ROLESET
+              value: "$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
           volumeMounts:
             - name: vault-tls
               mountPath: /etc/tls
-        - name: aws-probe
-          image: mesosphere/aws-cli
+        - name: gcp-probe
+          image: google/cloud-sdk:alpine
           command:
-            - ash
+            - sh
             - -c
             - |
               while true; do
-                aws sts get-caller-identity
+                gcloud dns managed-zones list
                 sleep 600
               done
           env:
-            - name: AWS_CONTAINER_CREDENTIALS_FULL_URI
-              value: "http://127.0.0.1:8000/credentials"
-            - name: AWS_REGION
-              value: "eu-west-1"
+            - name: GCE_METADATA_HOST
+              value: "127.0.0.1:8000"
       volumes:
         - name: vault-tls
           configMap:
