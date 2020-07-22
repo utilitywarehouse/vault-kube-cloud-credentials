@@ -1,6 +1,6 @@
 module github.com/utilitywarehouse/vault-kube-cloud-credentials
 
-go 1.13
+go 1.14
 
 require (
 	github.com/frankban/quicktest v1.9.0 // indirect
