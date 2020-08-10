@@ -16,17 +16,22 @@ type GCPCredentials struct {
 	TokenType    string `json:"token_type"`
 }
 
+// GCPProviderConfig provides methods that allow the sidecar to retrieve and
+// serve GCP credentials from vault for the given configuration
 type GCPProviderConfig struct {
 	GcpPath    string
 	GcpRoleSet string
 }
 
+// CredentialsPath returns the path to service the credentials on
 func (gpc *GCPProviderConfig) CredentialsPath() string {
 	// https://github.com/googleapis/google-cloud-go/blob/master/compute/metadata/metadata.go#L299
 	// https://github.com/golang/oauth2/blob/master/google/google.go#L175
 	return "/computeMetadata/v1/instance/service-accounts/{service_account}/token"
 }
 
+// GetCredentials retrieves credentials from vault for the secret indicated in
+// the configuration
 func (gpc *GCPProviderConfig) GetCredentials(client *vault.Client) (interface{}, time.Duration, error) {
 	// Get a credentials secret from vault for the role
 	secret, err := client.Logical().ReadWithData(gpc.SecretPath(), gpc.SecretData())
@@ -35,35 +40,40 @@ func (gpc *GCPProviderConfig) GetCredentials(client *vault.Client) (interface{},
 	}
 
 	// Convert the secret's TTL into a time.Duration
-	token_ttl, err := (secret.Data["token_ttl"].(json.Number)).Int64()
+	tokenTTL, err := (secret.Data["token_ttl"].(json.Number)).Int64()
 	if err != nil {
 		return nil, -1, err
 	}
-	leaseDuration := time.Duration(token_ttl) * time.Second
+	leaseDuration := time.Duration(tokenTTL) * time.Second
 
 	// Calculate expiry time
-	expires_at_seconds, err := (secret.Data["expires_at_seconds"].(json.Number)).Int64()
+	expiresAtSeconds, err := (secret.Data["expires_at_seconds"].(json.Number)).Int64()
 	if err != nil {
 		return nil, -1, err
 	}
-	log.Printf("new gcp credentials, expiring %s", time.Unix(expires_at_seconds, 0).Format("2006-01-02 15:04:05"))
+	log.Printf("new gcp credentials, expiring %s", time.Unix(expiresAtSeconds, 0).Format("2006-01-02 15:04:05"))
 
 	return &GCPCredentials{
 		AccessToken:  secret.Data["token"].(string),
-		ExpiresInSec: int(token_ttl),
+		ExpiresInSec: int(tokenTTL),
 		TokenType:    "Bearer",
 	}, leaseDuration, nil
 }
 
+// SecretData returns data to pass to vault when retrieving the GCP roleset
+// secret
 func (gpc *GCPProviderConfig) SecretData() map[string][]string {
 	return nil
 }
 
+// SecretPath is the path in vault to retrieve the GCP roleset from
 func (gpc *GCPProviderConfig) SecretPath() string {
 	return gpc.GcpPath + "/token/" + gpc.GcpRoleSet
 }
 
-func (apc *GCPProviderConfig) SetupAdditionalEndpoints(r *mux.Router) {
+// SetupAdditionalEndpoints adds an additional endpoint required to masuqerade
+// as the GCE metdata service
+func (gpc *GCPProviderConfig) SetupAdditionalEndpoints(r *mux.Router) {
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

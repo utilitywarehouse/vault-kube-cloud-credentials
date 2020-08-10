@@ -18,16 +18,21 @@ type AWSCredentials struct {
 	Expiration      time.Time `json:"Expiration"`
 }
 
+// AWSProviderConfig provides methods that allow the sidecar to retrieve and
+// serve AWS credentials from vault for the given configuration
 type AWSProviderConfig struct {
 	AwsPath    string
 	AwsRoleArn string
 	AwsRole    string
 }
 
+// CredentialsPath returns the path to serve the credentials on
 func (apc *AWSProviderConfig) CredentialsPath() string {
 	return "/credentials"
 }
 
+// GetCredentials retrieves credentials from vault for the secret indicated in
+// the configuration
 func (apc *AWSProviderConfig) GetCredentials(client *vault.Client) (interface{}, time.Duration, error) {
 	// Get a credentials secret from vault for the role
 	secret, err := client.Logical().ReadWithData(apc.SecretPath(), apc.SecretData())
@@ -67,6 +72,7 @@ func (apc *AWSProviderConfig) GetCredentials(client *vault.Client) (interface{},
 	}, leaseDuration, nil
 }
 
+// SecretData returns the data to pass to vault when retrieving the AWS role secret
 func (apc *AWSProviderConfig) SecretData() map[string][]string {
 	if apc.AwsRoleArn != "" {
 		return map[string][]string{
@@ -76,10 +82,13 @@ func (apc *AWSProviderConfig) SecretData() map[string][]string {
 	return nil
 }
 
+// SecretPath is the path in vault to retrieve the AWS role from
 func (apc *AWSProviderConfig) SecretPath() string {
 	return apc.AwsPath + "/sts/" + apc.AwsRole
 }
 
+// SetupAdditionalEndpoints does nothing because there are no additional paths
+// necessary to override the AWS metadata services
 func (apc *AWSProviderConfig) SetupAdditionalEndpoints(r *mux.Router) {}
 
 // lease represents the part of the response from /v1/sys/leases/lookup we care about (the expire time)
