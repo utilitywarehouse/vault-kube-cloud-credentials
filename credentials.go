@@ -16,6 +16,7 @@ import (
 type ProviderConfig interface {
 	CredentialsPath() string
 	GetCredentials(client *vault.Client) (interface{}, time.Duration, error)
+	SecretData() map[string][]string
 	SecretPath() string
 	SetupAdditionalEndpoints(r *mux.Router)
 }
@@ -29,8 +30,9 @@ type AWSCredentials struct {
 }
 
 type AWSProviderConfig struct {
-	AwsPath string
-	AwsRole string
+	AwsPath    string
+	AwsRoleArn string
+	AwsRole    string
 }
 
 func (apc *AWSProviderConfig) CredentialsPath() string {
@@ -39,7 +41,7 @@ func (apc *AWSProviderConfig) CredentialsPath() string {
 
 func (apc *AWSProviderConfig) GetCredentials(client *vault.Client) (interface{}, time.Duration, error) {
 	// Get a credentials secret from vault for the role
-	secret, err := client.Logical().Read(apc.SecretPath())
+	secret, err := client.Logical().ReadWithData(apc.SecretPath(), apc.SecretData())
 	if err != nil {
 		return nil, -1, err
 	}
@@ -76,6 +78,15 @@ func (apc *AWSProviderConfig) GetCredentials(client *vault.Client) (interface{},
 	}, leaseDuration, nil
 }
 
+func (apc *AWSProviderConfig) SecretData() map[string][]string {
+	if apc.AwsRoleArn != "" {
+		return map[string][]string{
+			"role_arn": []string{apc.AwsRoleArn},
+		}
+	}
+	return nil
+}
+
 func (apc *AWSProviderConfig) SecretPath() string {
 	return apc.AwsPath + "/sts/" + apc.AwsRole
 }
@@ -102,7 +113,7 @@ func (gpc *GCPProviderConfig) CredentialsPath() string {
 
 func (gpc *GCPProviderConfig) GetCredentials(client *vault.Client) (interface{}, time.Duration, error) {
 	// Get a credentials secret from vault for the role
-	secret, err := client.Logical().Read(gpc.GcpPath + "/token/" + gpc.GcpRoleSet)
+	secret, err := client.Logical().ReadWithData(gpc.SecretPath(), gpc.SecretData())
 	if err != nil {
 		return nil, -1, err
 	}
@@ -126,6 +137,10 @@ func (gpc *GCPProviderConfig) GetCredentials(client *vault.Client) (interface{},
 		ExpiresInSec: int(token_ttl),
 		TokenType:    "Bearer",
 	}, leaseDuration, nil
+}
+
+func (gpc *GCPProviderConfig) SecretData() map[string][]string {
+	return nil
 }
 
 func (gpc *GCPProviderConfig) SecretPath() string {
