@@ -42,31 +42,6 @@ Refer to the usage for more options:
 
 ```
 ./vault-kube-cloud-credentials -h
-Usage of ./vault-kube-cloud-credentials:
-  -aws-role string
-    	AWS secret role (required when -aws-sidecar is set)
-  -aws-role-arn string
-    	AWS role arn to assume
-  -aws-secret-backend string
-    	AWS secret backend path (default "aws")
-  -aws-sidecar
-    	Run the AWS sidecar
-  -gcp-roleset string
-    	GCP roleset (required when -gcp-sidecar is set)
-  -gcp-secret-backend string
-    	GCP secret backend path (default "gcp")
-  -gcp-sidecar
-    	Run the GCP sidecar
-  -kube-auth-backend string
-    	Kubernetes auth backend path (default "kubernetes")
-  -kube-auth-role string
-    	Kubernetes auth role (required when -aws-sidecar or -gcp-sidecar are set)
-  -kube-token-path string
-    	Path to the kubernetes serviceaccount token (default "/var/run/secrets/kubernetes.io/serviceaccount/token")
-  -listen-host string
-    	Host to listen on (default "127.0.0.1")
-  -listen-port string
-    	Port to listen on (default "8000")
 ```
 
 Additionally, you can use any of the [environment variables supported by the Vault
