@@ -26,16 +26,16 @@ type AWSProviderConfig struct {
 	AwsRole    string
 }
 
-// CredentialsPath returns the path to serve the credentials on
-func (apc *AWSProviderConfig) CredentialsPath() string {
+// credentialsPath returns the path to serve the credentials on
+func (apc *AWSProviderConfig) credentialsPath() string {
 	return "/credentials"
 }
 
-// GetCredentials retrieves credentials from vault for the secret indicated in
+// credentials retrieves credentials from vault for the secret indicated in
 // the configuration
-func (apc *AWSProviderConfig) GetCredentials(client *vault.Client) (interface{}, time.Duration, error) {
+func (apc *AWSProviderConfig) credentials(client *vault.Client) (interface{}, time.Duration, error) {
 	// Get a credentials secret from vault for the role
-	secret, err := client.Logical().ReadWithData(apc.SecretPath(), apc.SecretData())
+	secret, err := client.Logical().ReadWithData(apc.secretPath(), apc.secretData())
 	if err != nil {
 		return nil, -1, err
 	}
@@ -72,8 +72,8 @@ func (apc *AWSProviderConfig) GetCredentials(client *vault.Client) (interface{},
 	}, leaseDuration, nil
 }
 
-// SecretData returns the data to pass to vault when retrieving the AWS role secret
-func (apc *AWSProviderConfig) SecretData() map[string][]string {
+// secretData returns the data to pass to vault when retrieving the AWS role secret
+func (apc *AWSProviderConfig) secretData() map[string][]string {
 	if apc.AwsRoleArn != "" {
 		return map[string][]string{
 			"role_arn": []string{apc.AwsRoleArn},
@@ -82,14 +82,14 @@ func (apc *AWSProviderConfig) SecretData() map[string][]string {
 	return nil
 }
 
-// SecretPath is the path in vault to retrieve the AWS role from
-func (apc *AWSProviderConfig) SecretPath() string {
+// secretPath is the path in vault to retrieve the AWS role from
+func (apc *AWSProviderConfig) secretPath() string {
 	return apc.AwsPath + "/sts/" + apc.AwsRole
 }
 
-// SetupAdditionalEndpoints does nothing because there are no additional paths
+// setupAdditionalEndpoints does nothing because there are no additional paths
 // necessary to override the AWS metadata services
-func (apc *AWSProviderConfig) SetupAdditionalEndpoints(r *mux.Router) {}
+func (apc *AWSProviderConfig) setupAdditionalEndpoints(r *mux.Router) {}
 
 // lease represents the part of the response from /v1/sys/leases/lookup we care about (the expire time)
 type lease struct {

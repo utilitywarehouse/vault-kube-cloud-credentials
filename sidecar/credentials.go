@@ -7,55 +7,55 @@ import (
 	"time"
 )
 
-// CredentialsRenewer renews the credentials
-type CredentialsRenewer struct {
-	Credentials    chan<- interface{}
-	Errors         chan<- error
-	KubePath       string
-	KubeRole       string
-	ProviderConfig ProviderConfig
-	TokenPath      string
-	VaultConfig    *vault.Config
+// credentialsRenewer renews the credentials
+type credentialsRenewer struct {
+	credentials    chan<- interface{}
+	errors         chan<- error
+	kubePath       string
+	kubeRole       string
+	providerConfig ProviderConfig
+	tokenPath      string
+	vaultConfig    *vault.Config
 }
 
-// Start the renewer
-func (cr *CredentialsRenewer) Start() {
+// start the renewer
+func (cr *credentialsRenewer) start() {
 	// Create Vault client
-	client, err := vault.NewClient(cr.VaultConfig)
+	client, err := vault.NewClient(cr.vaultConfig)
 	if err != nil {
-		cr.Errors <- err
+		cr.errors <- err
 		return
 	}
 
 	for {
 		// Reload vault configuration from the environment
-		if err := cr.VaultConfig.ReadEnvironment(); err != nil {
-			cr.Errors <- err
+		if err := cr.vaultConfig.ReadEnvironment(); err != nil {
+			cr.errors <- err
 			return
 		}
 
 		// Login into Vault via kube SA
-		jwt, err := ioutil.ReadFile(cr.TokenPath)
+		jwt, err := ioutil.ReadFile(cr.tokenPath)
 		if err != nil {
-			cr.Errors <- err
+			cr.errors <- err
 			return
 		}
-		secret, err := client.Logical().Write("auth/"+cr.KubePath+"/login", map[string]interface{}{
+		secret, err := client.Logical().Write("auth/"+cr.kubePath+"/login", map[string]interface{}{
 			"jwt":  string(jwt),
-			"role": cr.KubeRole,
+			"role": cr.kubeRole,
 		})
 		if err != nil {
-			cr.Errors <- err
+			cr.errors <- err
 			return
 		}
 		client.SetToken(secret.Auth.ClientToken)
 
-		creds, duration, err := cr.ProviderConfig.GetCredentials(client)
+		creds, duration, err := cr.providerConfig.credentials(client)
 		if err != nil {
-			cr.Errors <- err
+			cr.errors <- err
 			return
 		}
-		cr.Credentials <- creds
+		cr.credentials <- creds
 
 		// Used to generate random values for sleeping between renewals
 		random := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))

@@ -34,26 +34,26 @@ func (s *Sidecar) Run() error {
 	creds := make(chan interface{})
 
 	// Keep credentials up to date
-	credentialsRenewer := &CredentialsRenewer{
-		Credentials:    creds,
-		Errors:         errors,
-		KubePath:       s.KubeAuthPath,
-		KubeRole:       s.KubeAuthRole,
-		ProviderConfig: s.ProviderConfig,
-		TokenPath:      s.TokenPath,
-		VaultConfig:    vault.DefaultConfig(),
+	cr := &credentialsRenewer{
+		credentials:    creds,
+		errors:         errors,
+		kubePath:       s.KubeAuthPath,
+		kubeRole:       s.KubeAuthRole,
+		providerConfig: s.ProviderConfig,
+		tokenPath:      s.TokenPath,
+		vaultConfig:    vault.DefaultConfig(),
 	}
 
 	// Serve the credentials
-	webserver := &Webserver{
-		Credentials:    creds,
-		ProviderConfig: s.ProviderConfig,
-		Errors:         errors,
-		ListenAddress:  s.ListenAddress,
+	ws := &webserver{
+		credentials:    creds,
+		providerConfig: s.ProviderConfig,
+		errors:         errors,
+		listenAddress:  s.ListenAddress,
 	}
 
-	go credentialsRenewer.Start()
-	go webserver.Start()
+	go cr.start()
+	go ws.start()
 
 	err := <-errors
 

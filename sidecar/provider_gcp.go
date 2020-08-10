@@ -23,18 +23,18 @@ type GCPProviderConfig struct {
 	GcpRoleSet string
 }
 
-// CredentialsPath returns the path to service the credentials on
-func (gpc *GCPProviderConfig) CredentialsPath() string {
+// credentialsPath returns the path to serve the credentials on
+func (gpc *GCPProviderConfig) credentialsPath() string {
 	// https://github.com/googleapis/google-cloud-go/blob/master/compute/metadata/metadata.go#L299
 	// https://github.com/golang/oauth2/blob/master/google/google.go#L175
 	return "/computeMetadata/v1/instance/service-accounts/{service_account}/token"
 }
 
-// GetCredentials retrieves credentials from vault for the secret indicated in
+// credentials retrieves credentials from vault for the secret indicated in
 // the configuration
-func (gpc *GCPProviderConfig) GetCredentials(client *vault.Client) (interface{}, time.Duration, error) {
+func (gpc *GCPProviderConfig) credentials(client *vault.Client) (interface{}, time.Duration, error) {
 	// Get a credentials secret from vault for the role
-	secret, err := client.Logical().ReadWithData(gpc.SecretPath(), gpc.SecretData())
+	secret, err := client.Logical().ReadWithData(gpc.secretPath(), gpc.secretData())
 	if err != nil {
 		return nil, -1, err
 	}
@@ -60,20 +60,20 @@ func (gpc *GCPProviderConfig) GetCredentials(client *vault.Client) (interface{},
 	}, leaseDuration, nil
 }
 
-// SecretData returns data to pass to vault when retrieving the GCP roleset
+// secretData returns data to pass to vault when retrieving the GCP roleset
 // secret
-func (gpc *GCPProviderConfig) SecretData() map[string][]string {
+func (gpc *GCPProviderConfig) secretData() map[string][]string {
 	return nil
 }
 
-// SecretPath is the path in vault to retrieve the GCP roleset from
-func (gpc *GCPProviderConfig) SecretPath() string {
+// secretPath is the path in vault to retrieve the GCP roleset from
+func (gpc *GCPProviderConfig) secretPath() string {
 	return gpc.GcpPath + "/token/" + gpc.GcpRoleSet
 }
 
-// SetupAdditionalEndpoints adds an additional endpoint required to masuqerade
+// setupAdditionalEndpoints adds an additional endpoint required to masuqerade
 // as the GCE metdata service
-func (gpc *GCPProviderConfig) SetupAdditionalEndpoints(r *mux.Router) {
+func (gpc *GCPProviderConfig) setupAdditionalEndpoints(r *mux.Router) {
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
