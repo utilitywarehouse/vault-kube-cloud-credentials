@@ -8,8 +8,6 @@ RUN apk --no-cache add git &&\
     go build -o /vault-kube-cloud-credentials .
 
 FROM alpine:3.10
-RUN apk --no-cache add tini
 COPY --from=build /vault-kube-cloud-credentials /vault-kube-cloud-credentials
 
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD [ "/vault-kube-cloud-credentials" ]
+ENTRYPOINT [ "/vault-kube-cloud-credentials" ]

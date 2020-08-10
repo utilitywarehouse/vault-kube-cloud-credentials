@@ -21,6 +21,10 @@ spec:
       containers:
         - name: aws-credentials
           image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.2.1
+          args:
+            - -aws-sidecar
+            - -aws-role=$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
+            - -kube-auth-role=$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
           env:
             - name: VAULT_ADDR
               value: "https://vault.example-namespace:8200"
@@ -34,10 +38,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: VKAC_KUBE_AUTH_ROLE
-              value: "$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
-            - name: VKAC_AWS_SECRET_ROLE
-              value: "$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
           volumeMounts:
             - name: vault-tls
               mountPath: /etc/tls

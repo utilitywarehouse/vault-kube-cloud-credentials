@@ -21,6 +21,10 @@ spec:
       containers:
         - name: gcp-credentials
           image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.2.1
+          args:
+            - -gcp-sidecar
+            - -gcp-roleset=$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
+            - -kube-auth-role=$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
           env:
             - name: VAULT_ADDR
               value: "https://vault.example-namespace:8200"
@@ -38,10 +42,6 @@ spec:
             # https://github.com/utilitywarehouse/tf_kube_creds_provider_via_vault/blob/master/gcp/variables.tf#L1-L3
             - name: ENVIRONMENT
               value: exp-1
-            - name: VKAC_KUBE_AUTH_ROLE
-              value: "$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
-            - name: VKAC_GCP_SECRET_ROLESET
-              value: "$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)"
           volumeMounts:
             - name: vault-tls
               mountPath: /etc/tls

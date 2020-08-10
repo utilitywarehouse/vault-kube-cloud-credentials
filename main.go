@@ -1,111 +1,80 @@
 package main
 
 import (
+	"flag"
+	"github.com/utilitywarehouse/vault-kube-cloud-credentials/sidecar"
 	"log"
 	"os"
-
-	vault "github.com/hashicorp/vault/api"
 )
 
 var (
-	awsPath    = os.Getenv("VKAC_AWS_SECRET_BACKEND_PATH")
-	awsRoleArn = os.Getenv("VKAC_AWS_SECRET_ROLE_ARN")
-	awsRole    = os.Getenv("VKAC_AWS_SECRET_ROLE")
-	gcpPath    = os.Getenv("VKAC_GCP_SECRET_BACKEND_PATH")
-	gcpRoleSet = os.Getenv("VKAC_GCP_SECRET_ROLESET")
-	kubePath   = os.Getenv("VKAC_KUBE_AUTH_BACKEND_PATH")
-	kubeRole   = os.Getenv("VKAC_KUBE_AUTH_ROLE")
-	tokenPath  = os.Getenv("VKAC_KUBE_SA_TOKEN_PATH")
-	listenHost = os.Getenv("VKAC_LISTEN_HOST")
-	listenPort = os.Getenv("VKAC_LISTEN_PORT")
+	awsSidecar = flag.Bool("aws-sidecar", false, "Run the AWS sidecar")
+	awsPath    = flag.String("aws-secret-backend", "aws", "AWS secret backend path")
+	awsRoleArn = flag.String("aws-role-arn", "", "AWS role arn to assume")
+	awsRole    = flag.String("aws-role", "", "AWS secret role (required when -aws-sidecar is set)")
+
+	gcpSidecar = flag.Bool("gcp-sidecar", false, "Run the GCP sidecar")
+	gcpPath    = flag.String("gcp-secret-backend", "gcp", "GCP secret backend path")
+	gcpRoleSet = flag.String("gcp-roleset", "", "GCP roleset (required when -gcp-sidecar is set)")
+
+	kubeAuthBackend = flag.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend path")
+	kubeAuthRole    = flag.String("kube-auth-role", "", "Kubernetes auth role (required when -aws-sidecar or -gcp-sidecar are set)")
+	kubeTokenPath   = flag.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
+
+	listenHost = flag.String("listen-host", "127.0.0.1", "Host to listen on")
+	listenPort = flag.String("listen-port", "8000", "Port to listen on")
 )
 
-func validate() {
-	if (len(awsRole) == 0 && len(gcpRoleSet) == 0) ||
-		(len(awsRole) > 0 && len(gcpRoleSet) > 0) {
-		log.Fatalf("error: must set either VKAC_AWS_SECRET_ROLE or VKAC_GCP_SECRET_ROLESET")
-	}
-
-	if len(kubeRole) == 0 {
-		log.Fatalf("error: must set VKAC_KUBE_AUTH_ROLE")
-	}
-
-	if len(awsPath) == 0 {
-		awsPath = "aws"
-	}
-
-	if len(gcpPath) == 0 {
-		gcpPath = "gcp"
-	}
-
-	if len(kubePath) == 0 {
-		kubePath = "kubernetes"
-	}
-
-	if len(tokenPath) == 0 {
-		tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-	}
-
-	if len(listenHost) == 0 {
-		listenHost = "127.0.0.1"
-	}
-
-	if len(listenPort) == 0 {
-		listenPort = "8000"
-	}
-}
-
 func main() {
-	validate()
+	flag.Parse()
 
-	// Channel for goroutines to send errors to
-	errors := make(chan error)
+	if len(os.Args) < 2 {
+		flag.PrintDefaults()
+		return
+	}
 
-	// This channel communicates changes in credentials between the credentials renewer and the webserver
-	creds := make(chan interface{})
+	if *awsSidecar && *gcpSidecar {
+		log.Fatal("Must only set -aws-sidecar or -gcp-sidecar, not both")
+	}
 
-	listenAddress := listenHost + ":" + listenPort
+	if *kubeAuthRole == "" {
+		log.Fatal("Must set -kube-auth-role")
+	}
 
-	var providerConfig ProviderConfig
-	if len(awsRole) > 0 {
-		providerConfig = &AWSProviderConfig{
-			AwsPath:    awsPath,
-			AwsRoleArn: awsRoleArn,
-			AwsRole:    awsRole,
+	sidecarConfig := &sidecar.Config{
+		KubeAuthPath:  *kubeAuthBackend,
+		KubeAuthRole:  *kubeAuthRole,
+		ListenAddress: *listenHost + ":" + *listenPort,
+		TokenPath:     *kubeTokenPath,
+	}
+
+	if *awsSidecar {
+		if *awsRole == "" {
+			log.Fatal("Must set -aws-role with -aws-sidecar")
+			return
+
 		}
-		log.Printf("using AWS secrets engine")
-	} else if len(gcpRoleSet) > 0 {
-		providerConfig = &GCPProviderConfig{
-			GcpPath:    gcpPath,
-			GcpRoleSet: gcpRoleSet,
+		sidecarConfig.ProviderConfig = &sidecar.AWSProviderConfig{
+			AwsPath:    *awsPath,
+			AwsRoleArn: *awsRoleArn,
+			AwsRole:    *awsRole,
 		}
-		log.Printf("using GCP secrets engine")
+	} else if *gcpSidecar {
+		if *gcpRoleSet == "" {
+			log.Fatal("Must set -gcp-roleset with -gcp-sidecar")
+			return
+
+		}
+		sidecarConfig.ProviderConfig = &sidecar.GCPProviderConfig{
+			GcpPath:    *gcpPath,
+			GcpRoleSet: *gcpRoleSet,
+		}
 	} else {
-		log.Fatalf("could not determine cloud provider")
+		flag.PrintDefaults()
+		return
 	}
 
-	// Keep credentials up to date
-	credentialsRenewer := &CredentialsRenewer{
-		Credentials:    creds,
-		Errors:         errors,
-		KubePath:       kubePath,
-		KubeRole:       kubeRole,
-		ProviderConfig: providerConfig,
-		TokenPath:      tokenPath,
-		VaultConfig:    vault.DefaultConfig(),
+	if err := sidecar.New(sidecarConfig).Run(); err != nil {
+		log.Fatal(err)
 	}
-
-	// Serve the credentials
-	webserver := &Webserver{
-		Credentials:    creds,
-		ProviderConfig: providerConfig,
-		Errors:         errors,
-		ListenAddress:  listenAddress,
-	}
-
-	go credentialsRenewer.Start()
-	go webserver.Start()
-
-	e := <-errors
-	log.Fatalf("error: %v", e)
 }

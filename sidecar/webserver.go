@@ -1,4 +1,4 @@
-package main
+package sidecar
 
 import (
 	"encoding/json"
@@ -16,26 +16,26 @@ const (
 	appDescription = "Fetch cloud provider credentials from vault on behalf of a Kubernetes service account and serve them via HTTP."
 )
 
-// Webserver serves the credentials
-type Webserver struct {
-	Credentials    <-chan interface{}
-	ProviderConfig ProviderConfig
-	Errors         chan<- error
-	ListenAddress  string
+// webserver serves the credentials
+type webserver struct {
+	credentials    <-chan interface{}
+	providerConfig ProviderConfig
+	errors         chan<- error
+	listenAddress  string
 }
 
-// Start the webserver
-func (w *Webserver) Start() {
+// start the webserver
+func (w *webserver) start() {
 	lock := &sync.RWMutex{}
 
 	// Block until the first credentials are delivered
-	latestCredentials := <-w.Credentials
+	latestCredentials := <-w.credentials
 
 	// Updated credentials when delivered by the w.Credentials channel
 	go func() {
 		for {
 			select {
-			case c := <-w.Credentials:
+			case c := <-w.credentials:
 				log.Printf("webserver: received credentials")
 				latestCredentials = c
 			}
@@ -52,7 +52,7 @@ func (w *Webserver) Start() {
 	)
 
 	// Serve credentials at the appropriate path for the provider
-	r.HandleFunc(w.ProviderConfig.CredentialsPath(), func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc(w.providerConfig.credentialsPath(), func(w http.ResponseWriter, r *http.Request) {
 		lock.RLock()
 		defer lock.RUnlock()
 		w.Header().Set("Content-Type", "application/json")
@@ -60,8 +60,8 @@ func (w *Webserver) Start() {
 		enc.Encode(latestCredentials)
 	})
 
-	w.ProviderConfig.SetupAdditionalEndpoints(r)
+	w.providerConfig.setupAdditionalEndpoints(r)
 
-	log.Printf("Listening on %s", w.ListenAddress)
-	w.Errors <- http.ListenAndServe(w.ListenAddress, r)
+	log.Printf("Listening on %s", w.listenAddress)
+	w.errors <- http.ListenAndServe(w.listenAddress, r)
 }
