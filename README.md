@@ -15,6 +15,7 @@ updated and valid.
 Refer to the [example](example/) for a reference Kubernetes deployment.
 
 Supported providers (secret engines):
+
 - `aws`
 - `gcp`
 
@@ -37,6 +38,9 @@ credentials which are served over http.
 Optional:
 
 - `VKAC_AWS_SECRET_BACKEND_PATH`: path of the aws secret backend (default: `aws`)
+- `VKAC_AWS_SECRET_ROLE_ARN`: the ARN of the role to assume. This is required
+  when there is more than one `role_arn` configured against the backend role
+  (not set by default)
 - `VKAC_GCP_SECRET_BACKEND_PATH`: path of the gcp secret backend (default: `gcp`)
 - `VKAC_KUBE_AUTH_BACKEND_PATH`: path of the kubernetes auth backend (default: `kubernetes`)
 - `VKAC_KUBE_SA_TOKEN_PATH`: path to a file containing the Kubernetes service account token (default: `/var/run/secrets/kubernetes.io/serviceaccount/token`)

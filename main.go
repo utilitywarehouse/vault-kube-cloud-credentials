@@ -9,6 +9,7 @@ import (
 
 var (
 	awsPath    = os.Getenv("VKAC_AWS_SECRET_BACKEND_PATH")
+	awsRoleArn = os.Getenv("VKAC_AWS_SECRET_ROLE_ARN")
 	awsRole    = os.Getenv("VKAC_AWS_SECRET_ROLE")
 	gcpPath    = os.Getenv("VKAC_GCP_SECRET_BACKEND_PATH")
 	gcpRoleSet = os.Getenv("VKAC_GCP_SECRET_ROLESET")
@@ -68,8 +69,9 @@ func main() {
 	var providerConfig ProviderConfig
 	if len(awsRole) > 0 {
 		providerConfig = &AWSProviderConfig{
-			AwsPath: awsPath,
-			AwsRole: awsRole,
+			AwsPath:    awsPath,
+			AwsRoleArn: awsRoleArn,
+			AwsRole:    awsRole,
 		}
 		log.Printf("using AWS secrets engine")
 	} else if len(gcpRoleSet) > 0 {
