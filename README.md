@@ -1,19 +1,47 @@
 # vault-kube-cloud-credentials
 
-This is a specialised sidecar for Kubernetes pods that fetches credentials for a
-cloud provider from [Vault](https://www.vaultproject.io) and serves them via
-http to be consumed by the cloud-provider's SDK.
+This is a system for retrieving cloud IAM credentials from Vault for use in
+Kubernetes.
 
-It is intended to be used with a Vault setup like [this](https://github.com/utilitywarehouse/vault-manifests).
+It's comprised of two parts:
 
-The sidecar logs with Vault using its Kubernetes Service Account, requests
-credentials from a secrets engine and serves the acquired credentials via http.
-The sidecar detects the lease expiration and keeps the served credentials
-updated and valid.
+- An operator which will create a login role and a secret in Vault based on
+  service account annotations
+- A sidecar which retrieves the credentials from vault and serves them over
+  http, acting as a metadata endpoint for the given cloud provider
 
-## Usage
+## Operator
 
-Refer to the [example](example/) for a reference Kubernetes deployment.
+### Requirements
+
+- A Vault server with:
+  - Kubernetes auth method, enabled and configured
+  - AWS secrets engine, enabled and configured
+
+### Usage
+
+Refer to the [example](manifests/operator/) for a reference Kubernetes deployment.
+
+Annotate your serviceaccounts and the operator will create the corresponding
+login role and aws secret role in Vault at
+`auth/kubernetes/roles/<prefix>_aws_<namespace>_<name>` and
+`aws/role/<prefix>_aws_<namespace>_<name>` respectively, where `<prefix>` is the
+string supplied with the `-prefix` flag (default: `vkcc`)
+
+```
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: foobar
+  annotations:
+    uw.systems/aws-role: "<your role>"
+```
+
+## Sidecars
+
+### Usage
+
+Refer to the [examples](manifests/examples/) for reference Kubernetes deployments.
 
 Supported providers (secret engines):
 
@@ -23,8 +51,7 @@ Supported providers (secret engines):
 For `aws`:
 
 ```
-./vault-kube-cloud-credentials \
-  -aws-sidecar \
+./vault-kube-cloud-credentials aws-sidecar \
   -kube-auth-role=<kubernetes auth role> \
   -aws-role=<aws secret role>
 ```
@@ -32,8 +59,7 @@ For `aws`:
 And `gcp`:
 
 ```
-./vault-kube-cloud-credentials \
-  -gcp-sidecar \
+./vault-kube-cloud-credentials gcp-sidecar \
   -kube-auth-role=<kubernetes auth role> \
   -gcp-roleset=<gcp secret roleset>
 ```
