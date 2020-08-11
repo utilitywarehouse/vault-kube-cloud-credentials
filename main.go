@@ -2,79 +2,194 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	vault "github.com/hashicorp/vault/api"
+	"github.com/utilitywarehouse/vault-kube-cloud-credentials/operator"
 	"github.com/utilitywarehouse/vault-kube-cloud-credentials/sidecar"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"log"
 	"os"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var (
-	awsSidecar = flag.Bool("aws-sidecar", false, "Run the AWS sidecar")
-	awsPath    = flag.String("aws-secret-backend", "aws", "AWS secret backend path")
-	awsRoleArn = flag.String("aws-role-arn", "", "AWS role arn to assume")
-	awsRole    = flag.String("aws-role", "", "AWS secret role (required when -aws-sidecar is set)")
+	operatorCommand             = flag.NewFlagSet("operator", flag.ExitOnError)
+	flagOperatorPrefix          = operatorCommand.String("prefix", "vkcc", "This prefix is prepended to all the roles and policies created in vault")
+	flagOperatorAWSBackend      = operatorCommand.String("aws-backend", "aws", "AWS secret backend path")
+	flagOperatorKubeAuthBackend = operatorCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
+	flagOperatorMetricsAddr     = operatorCommand.String("metrics-address", ":8080", "Metrics address")
 
-	gcpSidecar = flag.Bool("gcp-sidecar", false, "Run the GCP sidecar")
-	gcpPath    = flag.String("gcp-secret-backend", "gcp", "GCP secret backend path")
-	gcpRoleSet = flag.String("gcp-roleset", "", "GCP roleset (required when -gcp-sidecar is set)")
+	awsSidecarCommand    = flag.NewFlagSet("aws-sidecar", flag.ExitOnError)
+	flagAWSBackend       = awsSidecarCommand.String("backend", "aws", "AWS secret backend path")
+	flagAWSRoleArn       = awsSidecarCommand.String("role-arn", "", "AWS role arn to assume")
+	flagAWSRole          = awsSidecarCommand.String("role", "", "AWS secret role (required)")
+	flagAWSKubeAuthRole  = awsSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role (required)")
+	flagAWSKubeBackend   = awsSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
+	flagAWSKubeTokenPath = awsSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
+	flagAWSListenAddr    = awsSidecarCommand.String("listen-address", "127.0.0.1:8000", "Listen address")
 
-	kubeAuthBackend = flag.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend path")
-	kubeAuthRole    = flag.String("kube-auth-role", "", "Kubernetes auth role (required when -aws-sidecar or -gcp-sidecar are set)")
-	kubeTokenPath   = flag.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
-
-	listenHost = flag.String("listen-host", "127.0.0.1", "Host to listen on")
-	listenPort = flag.String("listen-port", "8000", "Port to listen on")
+	gcpSidecarCommand    = flag.NewFlagSet("gcp-sidecar", flag.ExitOnError)
+	flagGCPBackend       = gcpSidecarCommand.String("backend", "gcp", "GCP secret backend path")
+	flagGCPRoleSet       = gcpSidecarCommand.String("roleset", "", "GCP secret roleset (required)")
+	flagGCPKubeAuthRole  = gcpSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role (required)")
+	flagGCPKubeBackend   = gcpSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
+	flagGCPKubeTokenPath = gcpSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
+	flagGCPListenAddr    = gcpSidecarCommand.String("listen-address", "127.0.0.1:8000", "Listen address")
 )
 
+func usage() {
+	fmt.Printf(
+		`Usage:
+  %s [command]
+
+Commands:
+  operator      Run the operator
+  aws-sidecar   Sidecar for AWS credentials
+  gcp-sidecar   Sidecar for GCP credentials
+`, os.Args[0])
+}
+
 func main() {
-	flag.Parse()
+	flag.Usage = usage
 
 	if len(os.Args) < 2 {
-		flag.PrintDefaults()
+		usage()
 		return
 	}
 
-	if *awsSidecar && *gcpSidecar {
-		log.Fatal("Must only set -aws-sidecar or -gcp-sidecar, not both")
-	}
-
-	if *kubeAuthRole == "" {
-		log.Fatal("Must set -kube-auth-role")
-	}
-
-	sidecarConfig := &sidecar.Config{
-		KubeAuthPath:  *kubeAuthBackend,
-		KubeAuthRole:  *kubeAuthRole,
-		ListenAddress: *listenHost + ":" + *listenPort,
-		TokenPath:     *kubeTokenPath,
-	}
-
-	if *awsSidecar {
-		if *awsRole == "" {
-			log.Fatal("Must set -aws-role with -aws-sidecar")
-			return
-
-		}
-		sidecarConfig.ProviderConfig = &sidecar.AWSProviderConfig{
-			AwsPath:    *awsPath,
-			AwsRoleArn: *awsRoleArn,
-			AwsRole:    *awsRole,
-		}
-	} else if *gcpSidecar {
-		if *gcpRoleSet == "" {
-			log.Fatal("Must set -gcp-roleset with -gcp-sidecar")
-			return
-
-		}
-		sidecarConfig.ProviderConfig = &sidecar.GCPProviderConfig{
-			GcpPath:    *gcpPath,
-			GcpRoleSet: *gcpRoleSet,
-		}
-	} else {
-		flag.PrintDefaults()
+	switch os.Args[1] {
+	case "operator":
+		operatorCommand.Parse(os.Args[2:])
+	case "aws-sidecar":
+		awsSidecarCommand.Parse(os.Args[2:])
+	case "gcp-sidecar":
+		gcpSidecarCommand.Parse(os.Args[2:])
+	default:
+		usage()
 		return
 	}
 
-	if err := sidecar.New(sidecarConfig).Run(); err != nil {
-		log.Fatal(err)
+	if operatorCommand.Parsed() {
+		if len(operatorCommand.Args()) > 0 {
+			operatorCommand.PrintDefaults()
+			os.Exit(1)
+		}
+
+		scheme := runtime.NewScheme()
+
+		_ = clientgoscheme.AddToScheme(scheme)
+		_ = corev1.AddToScheme(scheme)
+
+		mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+			Scheme:             scheme,
+			MetricsBindAddress: *flagOperatorMetricsAddr,
+			LeaderElection:     false,
+		})
+		if err != nil {
+			log.Fatalf("error creating manager: %s", err)
+		}
+
+		vaultConfig := vault.DefaultConfig()
+		vaultClient, err := vault.NewClient(vaultConfig)
+		if err != nil {
+			log.Fatalf("error creating vault client: %s", err)
+		}
+		o, err := operator.NewAWSOperator(&operator.AWSOperatorConfig{
+			Config: &operator.Config{
+				KubeClient:            mgr.GetClient(),
+				KubernetesAuthBackend: *flagOperatorKubeAuthBackend,
+				Prefix:                *flagOperatorPrefix,
+				VaultClient:           vaultClient,
+				VaultConfig:           vault.DefaultConfig(),
+			},
+			AWSPath: *flagOperatorAWSBackend,
+		})
+		if err != nil {
+			log.Fatalf("error creating operator: %s", err)
+		}
+		if err = o.SetupWithManager(mgr); err != nil {
+			log.Fatalf("error creating controller: %s", err)
+		}
+
+		log.Print("starting manager")
+		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+			log.Fatalf("problem running manager: %s", err)
+		}
+
+		return
 	}
+
+	if awsSidecarCommand.Parsed() {
+		if len(awsSidecarCommand.Args()) > 0 {
+			awsSidecarCommand.PrintDefaults()
+			os.Exit(1)
+		}
+
+		if *flagAWSKubeAuthRole == "" {
+			fmt.Print("error: must set -kube-auth-role\n")
+			os.Exit(1)
+		}
+
+		if *flagAWSRole == "" {
+			fmt.Print("error: must set -role\n")
+			os.Exit(1)
+		}
+
+		sidecarConfig := &sidecar.Config{
+			KubeAuthPath:  *flagAWSKubeBackend,
+			KubeAuthRole:  *flagAWSKubeAuthRole,
+			ListenAddress: *flagAWSListenAddr,
+			ProviderConfig: &sidecar.AWSProviderConfig{
+				AwsPath:    *flagAWSBackend,
+				AwsRoleArn: *flagAWSRoleArn,
+				AwsRole:    *flagAWSRole,
+			},
+			TokenPath: *flagAWSKubeTokenPath,
+		}
+
+		if err := sidecar.New(sidecarConfig).Run(); err != nil {
+			log.Fatal(err)
+		}
+
+		return
+	}
+
+	if gcpSidecarCommand.Parsed() {
+		if len(gcpSidecarCommand.Args()) > 0 {
+			gcpSidecarCommand.PrintDefaults()
+			os.Exit(1)
+		}
+
+		if *flagGCPKubeAuthRole == "" {
+			fmt.Print("error: must set -kube-auth-role\n")
+			os.Exit(1)
+		}
+
+		if *flagGCPRoleSet == "" {
+			fmt.Print("error: must set -roleset\n")
+			os.Exit(1)
+		}
+
+		sidecarConfig := &sidecar.Config{
+			KubeAuthPath:  *flagGCPKubeBackend,
+			KubeAuthRole:  *flagGCPKubeAuthRole,
+			ListenAddress: *flagGCPListenAddr,
+			ProviderConfig: &sidecar.GCPProviderConfig{
+				GcpPath:    *flagGCPBackend,
+				GcpRoleSet: *flagGCPRoleSet,
+			},
+			TokenPath: *flagGCPKubeTokenPath,
+		}
+
+		if err := sidecar.New(sidecarConfig).Run(); err != nil {
+			log.Fatal(err)
+		}
+
+		return
+	}
+
+	usage()
+	return
 }

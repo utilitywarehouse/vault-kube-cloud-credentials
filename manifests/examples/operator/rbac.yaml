@@ -1,0 +1,13 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: vault-kube-cloud-credentials-operator
+roleRef:
+  kind: ClusterRole
+  name: vault-kube-cloud-credentials-operator
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+  - kind: ServiceAccount
+    name: vault-kube-cloud-credentials-operator
+    # update with the namespace where the operator is running
+    namespace: example
