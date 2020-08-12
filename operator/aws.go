@@ -3,11 +3,15 @@ package operator
 import (
 	"bytes"
 	"context"
+	"github.com/aws/aws-sdk-go/aws/arn"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	// Enables all auth methods for the kube client
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"log"
+	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -28,6 +32,109 @@ path "{{ .AWSPath }}/sts/{{ .Name }}" {
 }
 `
 
+// awsFileConfig configures the AWS operator
+type awsFileConfig struct {
+	AWS struct {
+		Rules AWSRules `yaml:"rules"`
+	} `yaml:"aws"`
+}
+
+// AWSRules are a collection of rules.
+type AWSRules []AWSRule
+
+// allow returns true if there is a rule in the list of rules which allows
+// a service account in the given namespace to assume the given role. Rules are
+// evaluated in order and allow returns true for the first matching rule in the
+// list
+func (ar AWSRules) allow(namespace, roleArn string) (bool, error) {
+	a, err := arn.Parse(roleArn)
+	if err != nil {
+		return false, err
+	}
+
+	for _, r := range ar {
+		allowed, err := r.allows(namespace, a)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
+	}
+
+	return len(ar) == 0, nil
+}
+
+// AWSRule restricts the arns that a service account can assume based on
+// patterns which match its namespace to an arn or arns
+type AWSRule struct {
+	NamespacePatterns []string `yaml:"namespacePatterns"`
+	RoleNamePatterns  []string `yaml:"roleNamePatterns"`
+	AccountIDs        []string `yaml:"accountIDs"`
+}
+
+// allows checks whether this rule allows a namespace to assume the given role_arn
+func (ar *AWSRule) allows(namespace string, roleArn arn.ARN) (bool, error) {
+	accountIDAllowed := ar.matchesAccountID(roleArn.AccountID)
+
+	namespaceAllowed, err := ar.matchesNamespace(namespace)
+	if err != nil {
+		return false, err
+	}
+
+	roleAllowed := false
+	if strings.HasPrefix(roleArn.Resource, "role/") {
+		roleAllowed, err = ar.matchesRoleName(strings.TrimPrefix(roleArn.Resource, "role/"))
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return accountIDAllowed && namespaceAllowed && roleAllowed, nil
+}
+
+// matchesAccountID returns true if the rule allows an accountID, or if it
+// doesn't contain an accountID at all
+func (ar *AWSRule) matchesAccountID(accountID string) bool {
+	for _, id := range ar.AccountIDs {
+		if id == accountID {
+			return true
+		}
+	}
+
+	return len(ar.AccountIDs) == 0
+}
+
+// matchesNamespace returns true if the rule allows the given namespace
+func (ar *AWSRule) matchesNamespace(namespace string) (bool, error) {
+	for _, np := range ar.NamespacePatterns {
+		match, err := filepath.Match(np, namespace)
+		if err != nil {
+			return false, err
+		}
+		if match {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// matchesRoleName returns true if the rule allows the given role name
+func (ar *AWSRule) matchesRoleName(roleName string) (bool, error) {
+	for _, rp := range ar.RoleNamePatterns {
+		match, err := filepath.Match(rp, roleName)
+		if err != nil {
+			return false, err
+		}
+		if match {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // AWSOperatorConfig provides configuration when creating a new Operator
 type AWSOperatorConfig struct {
 	*Config
@@ -38,7 +145,8 @@ type AWSOperatorConfig struct {
 // roles based on ServiceAccount annotations
 type AWSOperator struct {
 	*AWSOperatorConfig
-	tmpl *template.Template
+	rules AWSRules
+	tmpl  *template.Template
 }
 
 // NewAWSOperator returns a configured AWSOperator
@@ -54,6 +162,24 @@ func NewAWSOperator(config *AWSOperatorConfig) (*AWSOperator, error) {
 	}
 
 	return ar, nil
+}
+
+// LoadConfig loads configuration from a file
+func (o *AWSOperator) LoadConfig(file string) error {
+	afc := &awsFileConfig{}
+
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return err
+	}
+
+	if err := yaml.Unmarshal(data, afc); err != nil {
+		return err
+	}
+
+	o.rules = afc.AWS.Rules
+
+	return nil
 }
 
 // Start is ran when the manager starts up. We're using it to clear up orphaned
@@ -120,9 +246,12 @@ func (o *AWSOperator) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// Similarly, we can remove it from vault if there is no annotation
+	// If the service account exists but isn't valid for reconciling that means
+	// it could have previously been valid but the annotation has since been
+	// removed or changed to a value that violates the rules described in
+	// the config file. In which case it should be removed from vault.
 	roleArn := serviceAccount.Annotations[awsRoleAnnotation]
-	if roleArn == "" {
+	if !o.admitEvent(req.Namespace, roleArn) {
 		del = true
 	}
 
@@ -140,6 +269,22 @@ func (o *AWSOperator) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, err
 }
 
+// admitEvent controls whether an event should be reconciled or not based on the
+// presence of a role arn and whether the role arn is permitted for this
+// namespace by the rules laid out in the config file
+func (o *AWSOperator) admitEvent(namespace, roleArn string) bool {
+	if roleArn != "" {
+		allowed, err := o.rules.allow(namespace, roleArn)
+		if err != nil {
+			log.Printf("error matching %s against rules for namespace %s: %s", roleArn, namespace, err)
+		} else if allowed {
+			return true
+		}
+	}
+
+	return false
+}
+
 // SetupWithManager adds the operator as a runnable and a reconciler on the controller-runtime manager. It also
 // applies event filters that ensure Reconcile only processes relevant ServiceAccount events.
 func (o *AWSOperator) SetupWithManager(mgr ctrl.Manager) error {
@@ -151,15 +296,19 @@ func (o *AWSOperator) SetupWithManager(mgr ctrl.Manager) error {
 		For(&corev1.ServiceAccount{}).
 		WithEventFilter(predicate.Funcs{
 			CreateFunc: func(e event.CreateEvent) bool {
-				return e.Meta.GetAnnotations()[awsRoleAnnotation] != ""
+				return o.admitEvent(e.Meta.GetNamespace(), e.Meta.GetAnnotations()[awsRoleAnnotation])
 			},
 			DeleteFunc: func(e event.DeleteEvent) bool {
-				return e.Meta.GetAnnotations()[awsRoleAnnotation] != ""
+				return o.admitEvent(e.Meta.GetNamespace(), e.Meta.GetAnnotations()[awsRoleAnnotation])
 			},
 			GenericFunc: func(e event.GenericEvent) bool {
-				return e.Meta.GetAnnotations()[awsRoleAnnotation] != ""
+				return o.admitEvent(e.Meta.GetNamespace(), e.Meta.GetAnnotations()[awsRoleAnnotation])
 			},
 			UpdateFunc: func(e event.UpdateEvent) bool {
+				// Update events are a special case, because we
+				// want to remove the roles in vault when the
+				// annotation is removed or changed to an
+				// invalid value.
 				return e.MetaOld.GetAnnotations()[awsRoleAnnotation] != e.MetaNew.GetAnnotations()[awsRoleAnnotation]
 			},
 		}).
@@ -294,7 +443,7 @@ func (o *AWSOperator) garbageCollect(keys []interface{}) error {
 }
 
 // hasServiceAccount checks if a managed service account exists for the given
-// namespace+name combination, annotated with the correct annotation
+// namespace+name combination, annotated with a correct and valid annotation
 func (o *AWSOperator) hasServiceAccount(namespace, name string) (bool, error) {
 	serviceAccountList := &corev1.ServiceAccountList{}
 	err := o.KubeClient.List(context.Background(), serviceAccountList)
@@ -303,7 +452,12 @@ func (o *AWSOperator) hasServiceAccount(namespace, name string) (bool, error) {
 	}
 
 	for _, serviceAccount := range serviceAccountList.Items {
-		if serviceAccount.Namespace == namespace && serviceAccount.Name == name && serviceAccount.Annotations[awsRoleAnnotation] != "" {
+		if serviceAccount.Namespace == namespace &&
+			serviceAccount.Name == name &&
+			o.admitEvent(
+				serviceAccount.Namespace,
+				serviceAccount.Annotations[awsRoleAnnotation],
+			) {
 			return true, nil
 		}
 	}

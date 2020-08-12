@@ -20,6 +20,7 @@ var (
 	flagOperatorAWSBackend      = operatorCommand.String("aws-backend", "aws", "AWS secret backend path")
 	flagOperatorKubeAuthBackend = operatorCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
 	flagOperatorMetricsAddr     = operatorCommand.String("metrics-address", ":8080", "Metrics address")
+	flagOperatorConfigFile      = operatorCommand.String("config-file", "", "Path to a configuration file")
 
 	awsSidecarCommand    = flag.NewFlagSet("aws-sidecar", flag.ExitOnError)
 	flagAWSBackend       = awsSidecarCommand.String("backend", "aws", "AWS secret backend path")
@@ -109,6 +110,13 @@ func main() {
 		if err != nil {
 			log.Fatalf("error creating operator: %s", err)
 		}
+
+		if *flagOperatorConfigFile != "" {
+			if err := o.LoadConfig(*flagOperatorConfigFile); err != nil {
+				log.Fatalf("error loading configuration file: %s", err)
+			}
+		}
+
 		if err = o.SetupWithManager(mgr); err != nil {
 			log.Fatalf("error creating controller: %s", err)
 		}

@@ -3,6 +3,7 @@ module github.com/utilitywarehouse/vault-kube-cloud-credentials
 go 1.14
 
 require (
+	github.com/aws/aws-sdk-go v1.30.27
 	github.com/gorilla/mux v1.7.4
 	github.com/hashicorp/vault v1.5.0
 	github.com/hashicorp/vault-plugin-auth-kubernetes v0.7.0
@@ -12,6 +13,7 @@ require (
 	github.com/prometheus/client_golang v1.6.0 // indirect
 	github.com/stretchr/testify v1.5.1
 	github.com/utilitywarehouse/go-operational v0.0.0-20190722153447-b0f3f6284543
+	gopkg.in/yaml.v2 v2.3.0
 	gotest.tools/v3 v3.0.2 // indirect
 	k8s.io/api v0.18.6
 	k8s.io/apimachinery v0.18.6
