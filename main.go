@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"strings"
 )
 
 var (
@@ -75,6 +76,11 @@ func main() {
 	if operatorCommand.Parsed() {
 		if len(operatorCommand.Args()) > 0 {
 			operatorCommand.PrintDefaults()
+			os.Exit(1)
+		}
+
+		if strings.Contains(*flagOperatorPrefix, "_") {
+			fmt.Printf("prefix must not contain a '_': %s\n", *flagOperatorPrefix)
 			os.Exit(1)
 		}
 
