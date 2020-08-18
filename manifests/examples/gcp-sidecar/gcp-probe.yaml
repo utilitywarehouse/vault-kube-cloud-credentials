@@ -20,10 +20,10 @@ spec:
       serviceAccountName: gcp-probe
       containers:
         - name: gcp-credentials
-          image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.2.1
+          image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.3.0
           args:
-            - -gcp-sidecar
-            - -gcp-roleset=$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
+            - gcp-sidecar
+            - -roleset=$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
             - -kube-auth-role=$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
           env:
             - name: VAULT_ADDR
