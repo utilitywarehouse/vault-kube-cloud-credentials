@@ -1,10 +1,12 @@
 package sidecar
 
 import (
-	vault "github.com/hashicorp/vault/api"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"time"
+
+	vault "github.com/hashicorp/vault/api"
 )
 
 // credentialsRenewer renews the credentials
@@ -16,6 +18,7 @@ type credentialsRenewer struct {
 	providerConfig ProviderConfig
 	tokenPath      string
 	vaultConfig    *vault.Config
+	vaultClient    *vault.Client
 }
 
 // start the renewer
@@ -26,41 +29,57 @@ func (cr *credentialsRenewer) start() {
 		cr.errors <- err
 		return
 	}
+	cr.vaultClient = client
+
+	// Random is used for the backoff and the interval between renewal
+	// attempts
+	rand.Seed(int64(time.Now().Nanosecond()))
+
+	b := &Backoff{
+		Jitter: true,
+		Min:    2 * time.Second,
+		Max:    1 * time.Minute,
+	}
 
 	for {
-		// Reload vault configuration from the environment
-		if err := cr.vaultConfig.ReadEnvironment(); err != nil {
-			cr.errors <- err
-			return
+		creds, duration, err := cr.renew()
+		if err != nil {
+			d := b.Duration()
+			log.Printf("error: %s, backoff: %v", err, d)
+			time.Sleep(d)
+			continue
 		}
+		b.Reset()
 
-		// Login into Vault via kube SA
-		jwt, err := ioutil.ReadFile(cr.tokenPath)
-		if err != nil {
-			cr.errors <- err
-			return
-		}
-		secret, err := client.Logical().Write("auth/"+cr.kubePath+"/login", map[string]interface{}{
-			"jwt":  string(jwt),
-			"role": cr.kubeRole,
-		})
-		if err != nil {
-			cr.errors <- err
-			return
-		}
-		client.SetToken(secret.Auth.ClientToken)
-
-		creds, duration, err := cr.providerConfig.credentials(client)
-		if err != nil {
-			cr.errors <- err
-			return
-		}
+		// Feed the credentials through the channel
 		cr.credentials <- creds
 
-		// Used to generate random values for sleeping between renewals
-		random := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
-
 		// Sleep until its time to renew the creds
-		time.Sleep(sleepDuration(duration, random))
+		time.Sleep(sleepDuration(duration))
 	}
+}
+
+// renew the credentials
+func (cr *credentialsRenewer) renew() (interface{}, time.Duration, error) {
+	// Reload vault configuration from the environment
+	if err := cr.vaultConfig.ReadEnvironment(); err != nil {
+		return nil, -1, err
+	}
+
+	// Login to Vault via kube SA
+	jwt, err := ioutil.ReadFile(cr.tokenPath)
+	if err != nil {
+		return nil, -1, err
+	}
+	secret, err := cr.vaultClient.Logical().Write("auth/"+cr.kubePath+"/login", map[string]interface{}{
+		"jwt":  string(jwt),
+		"role": cr.kubeRole,
+	})
+	if err != nil {
+		return nil, -1, err
+	}
+	cr.vaultClient.SetToken(secret.Auth.ClientToken)
+
+	// Retrieve credentials for the provider
+	return cr.providerConfig.credentials(cr.vaultClient)
 }
