@@ -4,7 +4,6 @@ go 1.14
 
 require (
 	github.com/aws/aws-sdk-go v1.30.27
-	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/gorilla/mux v1.7.4
 	github.com/hashicorp/vault v1.5.0
 	github.com/hashicorp/vault-plugin-auth-kubernetes v0.7.0

@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/cenkalti/backoff"
 	vault "github.com/hashicorp/vault/api"
 )
 
@@ -32,43 +31,31 @@ func (cr *credentialsRenewer) start() {
 	}
 	cr.vaultClient = client
 
-	b := backoff.NewExponentialBackOff()
-	b.RandomizationFactor = 0.2
-	b.Multiplier = 2
-	b.InitialInterval = 2 * time.Second
-	b.MaxElapsedTime = 0
+	// Random is used for the backoff and the interval between renewal
+	// attempts
+	rand.Seed(int64(time.Now().Nanosecond()))
+
+	b := &Backoff{
+		Jitter: true,
+		Min:    2 * time.Second,
+		Max:    1 * time.Minute,
+	}
 
 	for {
-		var (
-			creds    interface{}
-			duration time.Duration
-			err      error
-		)
-
-		err = backoff.RetryNotify(
-			func() error {
-				creds, duration, err = cr.renew()
-
-				return err
-			},
-			b,
-			func(err error, t time.Duration) {
-				log.Printf("error: %s, backoff: %v", err, t)
-			},
-		)
+		creds, duration, err := cr.renew()
 		if err != nil {
-			cr.errors <- err
-			return
+			d := b.Duration()
+			log.Printf("error: %s, backoff: %v", err, d)
+			time.Sleep(d)
+			continue
 		}
+		b.Reset()
 
 		// Feed the credentials through the channel
 		cr.credentials <- creds
 
-		// Used to generate random values for sleeping between renewals
-		random := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
-
 		// Sleep until its time to renew the creds
-		time.Sleep(sleepDuration(duration, random))
+		time.Sleep(sleepDuration(duration))
 	}
 }
 
