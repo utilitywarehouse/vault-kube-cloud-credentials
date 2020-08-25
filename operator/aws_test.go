@@ -18,6 +18,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 // TestAWSOperatorReconcile walks through creating, updating and removing objects
@@ -40,6 +41,8 @@ func TestAWSOperatorReconcile(t *testing.T) {
 	fakeVaultCluster := newFakeVaultCluster(t)
 
 	core := fakeVaultCluster.Cores[0]
+
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	a, err := NewAWSOperator(&AWSOperatorConfig{
 		Config: &Config{
@@ -155,6 +158,8 @@ func TestOperatorReconcileDelete(t *testing.T) {
 
 	core := fakeVaultCluster.Cores[0]
 
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+
 	a, err := NewAWSOperator(&AWSOperatorConfig{
 		Config: &Config{
 			KubeClient:            fakeKubeClient,
@@ -244,6 +249,8 @@ func TestOperatorReconcileBlocked(t *testing.T) {
 	fakeVaultCluster := newFakeVaultCluster(t)
 
 	core := fakeVaultCluster.Cores[0]
+
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	a, err := NewAWSOperator(&AWSOperatorConfig{
 		Config: &Config{
@@ -433,7 +440,11 @@ func TestAWSOperatorStart(t *testing.T) {
 // TestAWSOperatorAdmitEvent tests that events are allowed and disallowed
 // according to the rules
 func TestAWSOperatorAdmitEvent(t *testing.T) {
-	o := &AWSOperator{}
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+
+	o := &AWSOperator{
+		log: ctrl.Log.WithName("operator").WithName("aws"),
+	}
 
 	// Test that without any rules any valid event is admitted
 	assert.True(t, o.admitEvent("foobar", "arn:aws:iam::111111111111:role/foobar-role"))

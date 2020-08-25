@@ -3,16 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"strings"
+
 	vault "github.com/hashicorp/vault/api"
 	"github.com/utilitywarehouse/vault-kube-cloud-credentials/operator"
 	"github.com/utilitywarehouse/vault-kube-cloud-credentials/sidecar"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"log"
-	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"strings"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 var (
@@ -39,6 +40,8 @@ var (
 	flagGCPKubeBackend   = gcpSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
 	flagGCPKubeTokenPath = gcpSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
 	flagGCPListenAddr    = gcpSidecarCommand.String("listen-address", "127.0.0.1:8000", "Listen address")
+
+	log = ctrl.Log.WithName("main")
 )
 
 func usage() {
@@ -61,17 +64,24 @@ func main() {
 		return
 	}
 
+	logOpts := zap.Options{}
+
 	switch os.Args[1] {
 	case "operator":
+		logOpts.BindFlags(operatorCommand)
 		operatorCommand.Parse(os.Args[2:])
 	case "aws-sidecar":
+		logOpts.BindFlags(awsSidecarCommand)
 		awsSidecarCommand.Parse(os.Args[2:])
 	case "gcp-sidecar":
+		logOpts.BindFlags(gcpSidecarCommand)
 		gcpSidecarCommand.Parse(os.Args[2:])
 	default:
 		usage()
 		return
 	}
+
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&logOpts)))
 
 	if operatorCommand.Parsed() {
 		if len(operatorCommand.Args()) > 0 {
@@ -95,13 +105,15 @@ func main() {
 			LeaderElection:     false,
 		})
 		if err != nil {
-			log.Fatalf("error creating manager: %s", err)
+			log.Error(err, "error creating manager")
+			os.Exit(1)
 		}
 
 		vaultConfig := vault.DefaultConfig()
 		vaultClient, err := vault.NewClient(vaultConfig)
 		if err != nil {
-			log.Fatalf("error creating vault client: %s", err)
+			log.Error(err, "error creating vault client")
+			os.Exit(1)
 		}
 		o, err := operator.NewAWSOperator(&operator.AWSOperatorConfig{
 			Config: &operator.Config{
@@ -114,22 +126,25 @@ func main() {
 			AWSPath: *flagOperatorAWSBackend,
 		})
 		if err != nil {
-			log.Fatalf("error creating operator: %s", err)
+			log.Error(err, "error creating operator")
+			os.Exit(1)
 		}
 
 		if *flagOperatorConfigFile != "" {
 			if err := o.LoadConfig(*flagOperatorConfigFile); err != nil {
-				log.Fatalf("error loading configuration file: %s", err)
+				log.Error(err, "error loading configuration file")
+				os.Exit(1)
 			}
 		}
 
 		if err = o.SetupWithManager(mgr); err != nil {
-			log.Fatalf("error creating controller: %s", err)
+			log.Error(err, "error creating controller")
+			os.Exit(1)
 		}
 
-		log.Print("starting manager")
 		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-			log.Fatalf("problem running manager: %s", err)
+			log.Error(err, "error running manager")
+			os.Exit(1)
 		}
 
 		return
@@ -164,7 +179,8 @@ func main() {
 		}
 
 		if err := sidecar.New(sidecarConfig).Run(); err != nil {
-			log.Fatal(err)
+			log.Error(err, "error running sidecar")
+			os.Exit(1)
 		}
 
 		return
@@ -198,7 +214,8 @@ func main() {
 		}
 
 		if err := sidecar.New(sidecarConfig).Run(); err != nil {
-			log.Fatal(err)
+			log.Error(err, "error running sidecar")
+			os.Exit(1)
 		}
 
 		return
