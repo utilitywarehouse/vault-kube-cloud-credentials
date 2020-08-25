@@ -192,9 +192,13 @@ func (o *AWSOperator) Start(stop <-chan struct{}) error {
 	if err != nil {
 		return err
 	}
-	err = o.garbageCollect(awsRoleList.Data["keys"].([]interface{}))
-	if err != nil {
-		return err
+	if awsRoleList != nil {
+		if keys, ok := awsRoleList.Data["keys"].([]interface{}); ok {
+			err = o.garbageCollect(keys)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	// Kubernetes auth roles
@@ -202,9 +206,13 @@ func (o *AWSOperator) Start(stop <-chan struct{}) error {
 	if err != nil {
 		return err
 	}
-	err = o.garbageCollect(kubeAuthRoleList.Data["keys"].([]interface{}))
-	if err != nil {
-		return err
+	if kubeAuthRoleList != nil {
+		if keys, ok := kubeAuthRoleList.Data["keys"].([]interface{}); ok {
+			err = o.garbageCollect(keys)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	// Policies
@@ -212,9 +220,13 @@ func (o *AWSOperator) Start(stop <-chan struct{}) error {
 	if err != nil {
 		return err
 	}
-	err = o.garbageCollect(policies.Data["keys"].([]interface{}))
-	if err != nil {
-		return err
+	if policies != nil {
+		if keys, ok := policies.Data["keys"].([]interface{}); ok {
+			err = o.garbageCollect(keys)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	log.Print("aws garbage collection finished")
