@@ -193,8 +193,8 @@ func (o *AWSOperator) Start(stop <-chan struct{}) error {
 		return err
 	}
 	if awsRoleList != nil {
-		if keys, ok := awsRoleList.Data["keys"]; ok {
-			err = o.garbageCollect(keys.([]interface{}))
+		if keys, ok := awsRoleList.Data["keys"].([]interface{}); ok {
+			err = o.garbageCollect(keys)
 			if err != nil {
 				return err
 			}
@@ -207,8 +207,8 @@ func (o *AWSOperator) Start(stop <-chan struct{}) error {
 		return err
 	}
 	if kubeAuthRoleList != nil {
-		if keys, ok := kubeAuthRoleList.Data["keys"]; ok {
-			err = o.garbageCollect(keys.([]interface{}))
+		if keys, ok := kubeAuthRoleList.Data["keys"].([]interface{}); ok {
+			err = o.garbageCollect(keys)
 			if err != nil {
 				return err
 			}
@@ -221,8 +221,8 @@ func (o *AWSOperator) Start(stop <-chan struct{}) error {
 		return err
 	}
 	if policies != nil {
-		if keys, ok := policies.Data["keys"]; ok {
-			err = o.garbageCollect(keys.([]interface{}))
+		if keys, ok := policies.Data["keys"].([]interface{}); ok {
+			err = o.garbageCollect(keys)
 			if err != nil {
 				return err
 			}
