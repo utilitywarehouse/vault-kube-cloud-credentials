@@ -295,6 +295,141 @@ func TestOperatorReconcileBlocked(t *testing.T) {
 	assert.Empty(t, noAWSRole)
 }
 
+// TestAWSOperatorStart tests the garbage collection performed by the Start
+// method
+func TestAWSOperatorStart(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+
+	fakeKubeClient := fake.NewFakeClientWithScheme(scheme)
+
+	fakeVaultCluster := newFakeVaultCluster(t)
+
+	core := fakeVaultCluster.Cores[0]
+
+	a, err := NewAWSOperator(&AWSOperatorConfig{
+		Config: &Config{
+			KubeClient:            fakeKubeClient,
+			KubernetesAuthBackend: "kubernetes",
+			Prefix:                "vkcc",
+			VaultClient:           core.Client,
+			VaultConfig:           vaultapi.DefaultConfig(),
+		},
+		AWSPath: "aws",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stopc := make(<-chan struct{})
+
+	// Test that Start returns cleanly when there are no items in vault
+	err = a.Start(stopc)
+	assert.NoError(t, err)
+
+	// Create policies
+	policy, err := a.renderAWSPolicyTemplate("vkcc_aws_bar_foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := core.Client.Logical().Write("sys/policy/vkcc_aws_bar_foo", map[string]interface{}{
+		"policy": policy,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	policyGC, err := a.renderAWSPolicyTemplate("vkcc_aws_bar_gc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := core.Client.Logical().Write("sys/policy/vkcc_aws_bar_gc", map[string]interface{}{
+		"policy": policyGC,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create kubernetes auth backend roles
+	if _, err := core.Client.Logical().Write("auth/kubernetes/role/vkcc_aws_bar_foo", map[string]interface{}{
+		"bound_service_account_names":      []string{"foo"},
+		"bound_service_account_namespaces": []string{"bar"},
+		"policies":                         []string{"default", "vkcc_aws_bar_foo"},
+		"ttl":                              900,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := core.Client.Logical().Write("auth/kubernetes/role/vkcc_aws_bar_gc", map[string]interface{}{
+		"bound_service_account_names":      []string{"gc"},
+		"bound_service_account_namespaces": []string{"bar"},
+		"policies":                         []string{"default", "vkcc_aws_bar_gc"},
+		"ttl":                              900,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create aws secret backend roles
+	if _, err := core.Client.Logical().Write("aws/roles/vkcc_aws_bar_foo", map[string]interface{}{
+		"default_sts_ttl": 900,
+		"role_arns":       []string{"arn:aws:iam::111111111111:role/foobar-role"},
+		"credential_type": "assumed_role",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := core.Client.Logical().Write("aws/roles/vkcc_aws_bar_gc", map[string]interface{}{
+		"default_sts_ttl": 900,
+		"role_arns":       []string{"arn:aws:iam::111111111111:role/foobar-gc-role"},
+		"credential_type": "assumed_role",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add a service account for only one of the keys that have been written
+	// to vault
+	a.KubeClient = fake.NewFakeClientWithScheme(scheme, &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "bar",
+			Annotations: map[string]string{
+				awsRoleAnnotation: "arn:aws:iam::111111111111:role/foobar-role",
+			},
+		},
+	})
+
+	// This should remove keys for vkcc_aws_bar_gc but leave
+	// vkcc_aws_bar_foo
+	err = a.Start(stopc)
+	assert.NoError(t, err)
+
+	// Test that the gc'd policy is nil
+	removedPolicy, err := core.Client.Logical().Read("sys/policy/vkcc_aws_bar_gc")
+	assert.NoError(t, err)
+	assert.Empty(t, removedPolicy)
+
+	// Test that the gc'd kubernetes auth role is nil
+	removedKubeAuthRole, err := core.Client.Logical().Read("auth/kubernetes/role/vkcc_aws_bar_gc")
+	assert.NoError(t, err)
+	assert.Empty(t, removedKubeAuthRole)
+
+	// Test that the gc'd aws role is nil
+	removedAWSRole, err := core.Client.Logical().Read("aws/roles/vkcc_aws_bar_gc")
+	assert.NoError(t, err)
+	assert.Empty(t, removedAWSRole)
+
+	// Test that the bar/foo policy has not been gc'd
+	keptPolicy, err := core.Client.Logical().Read("sys/policy/vkcc_aws_bar_foo")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, keptPolicy)
+
+	// Test that the bar/foo kubernetes auth role has not been gc'd
+	keptKubeAuthRole, err := core.Client.Logical().Read("auth/kubernetes/role/vkcc_aws_bar_foo")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, keptKubeAuthRole)
+
+	// Test that the bar/foo aws secret role has not been gc'd
+	keptAWSRole, err := core.Client.Logical().Read("aws/roles/vkcc_aws_bar_foo")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, keptAWSRole)
+}
+
 // TestAWSOperatorAdmitEvent tests that events are allowed and disallowed
 // according to the rules
 func TestAWSOperatorAdmitEvent(t *testing.T) {
