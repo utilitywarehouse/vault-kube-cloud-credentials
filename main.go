@@ -121,7 +121,7 @@ func main() {
 				KubernetesAuthBackend: *flagOperatorKubeAuthBackend,
 				Prefix:                *flagOperatorPrefix,
 				VaultClient:           vaultClient,
-				VaultConfig:           vault.DefaultConfig(),
+				VaultConfig:           vaultConfig,
 			},
 			AWSPath: *flagOperatorAWSBackend,
 		})
