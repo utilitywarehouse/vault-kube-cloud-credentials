@@ -2,7 +2,6 @@ package sidecar
 
 import (
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"time"
 
@@ -45,7 +44,7 @@ func (cr *credentialsRenewer) start() {
 		creds, duration, err := cr.renew()
 		if err != nil {
 			d := b.Duration()
-			log.Printf("error: %s, backoff: %v", err, d)
+			log.Error(err, "error renewing credentials", "backoff", d)
 			time.Sleep(d)
 			continue
 		}

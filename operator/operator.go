@@ -6,6 +6,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+var (
+	log = ctrl.Log.WithName("operator")
+)
+
 // Config is the base configuration for an operator
 type Config struct {
 	KubeClient            client.Client

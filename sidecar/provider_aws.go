@@ -6,7 +6,6 @@ import (
 	vault "github.com/hashicorp/vault/api"
 	"io"
 	"io/ioutil"
-	"log"
 	"time"
 )
 
@@ -62,7 +61,7 @@ func (apc *AWSProviderConfig) credentials(client *vault.Client) (interface{}, ti
 		return nil, -1, err
 	}
 
-	log.Printf("new aws credentials: %s, expiring %s", secret.Data["access_key"].(string), l.Data.ExpireTime.Format("2006-01-02 15:04:05"))
+	log.Info("new aws credentials", "access_key", secret.Data["access_key"].(string), "expiration", l.Data.ExpireTime.Format("2006-01-02 15:04:05"))
 
 	return &AWSCredentials{
 		AccessKeyID:     secret.Data["access_key"].(string),

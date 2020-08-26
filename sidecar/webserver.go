@@ -3,7 +3,6 @@ package sidecar
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 
@@ -36,7 +35,7 @@ func (w *webserver) start() {
 		for {
 			select {
 			case c := <-w.credentials:
-				log.Printf("webserver: received credentials")
+				log.Info("webserver recevied credentials")
 				latestCredentials = c
 			}
 		}
@@ -62,6 +61,6 @@ func (w *webserver) start() {
 
 	w.providerConfig.setupAdditionalEndpoints(r)
 
-	log.Printf("Listening on %s", w.listenAddress)
+	log.Info("webserver is listening", "address", w.listenAddress)
 	w.errors <- http.ListenAndServe(w.listenAddress, r)
 }

@@ -2,6 +2,11 @@ package sidecar
 
 import (
 	vault "github.com/hashicorp/vault/api"
+	ctrl "sigs.k8s.io/controller-runtime"
+)
+
+var (
+	log = ctrl.Log.WithName("sidecar").WithName("aws")
 )
 
 // Config configures the sidecar

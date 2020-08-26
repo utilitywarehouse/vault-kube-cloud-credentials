@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/gorilla/mux"
 	vault "github.com/hashicorp/vault/api"
-	"log"
 	"net/http"
 	"time"
 )
@@ -51,7 +50,7 @@ func (gpc *GCPProviderConfig) credentials(client *vault.Client) (interface{}, ti
 	if err != nil {
 		return nil, -1, err
 	}
-	log.Printf("new gcp credentials, expiring %s", time.Unix(expiresAtSeconds, 0).Format("2006-01-02 15:04:05"))
+	log.Info("new gcp credentials", "expiration", time.Unix(expiresAtSeconds, 0).Format("2006-01-02 15:04:05"))
 
 	return &GCPCredentials{
 		AccessToken:  secret.Data["token"].(string),

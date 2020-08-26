@@ -3,20 +3,24 @@ package operator
 import (
 	"bytes"
 	"context"
-	"github.com/aws/aws-sdk-go/aws/arn"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
+
+	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/go-logr/logr"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+
 	// Enables all auth methods for the kube client
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"log"
+
 	"path/filepath"
+	"strings"
+	"text/template"
+
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"strings"
-	"text/template"
 )
 
 const (
@@ -145,6 +149,7 @@ type AWSOperatorConfig struct {
 // roles based on ServiceAccount annotations
 type AWSOperator struct {
 	*AWSOperatorConfig
+	log   logr.Logger
 	rules AWSRules
 	tmpl  *template.Template
 }
@@ -158,6 +163,7 @@ func NewAWSOperator(config *AWSOperatorConfig) (*AWSOperator, error) {
 
 	ar := &AWSOperator{
 		AWSOperatorConfig: config,
+		log:               log.WithName("aws"),
 		tmpl:              tmpl,
 	}
 
@@ -185,7 +191,7 @@ func (o *AWSOperator) LoadConfig(file string) error {
 // Start is ran when the manager starts up. We're using it to clear up orphaned
 // serviceaccounts that could have been missed while the operator was down
 func (o *AWSOperator) Start(stop <-chan struct{}) error {
-	log.Print("aws garbage collection started")
+	o.log.Info("garbage collection started")
 
 	// AWS secret roles
 	awsRoleList, err := o.VaultClient.Logical().List(o.AWSPath + "/roles/")
@@ -229,7 +235,7 @@ func (o *AWSOperator) Start(stop <-chan struct{}) error {
 		}
 	}
 
-	log.Print("aws garbage collection finished")
+	o.log.Info("garbage collection finished")
 
 	return nil
 }
@@ -288,7 +294,7 @@ func (o *AWSOperator) admitEvent(namespace, roleArn string) bool {
 	if roleArn != "" {
 		allowed, err := o.rules.allow(namespace, roleArn)
 		if err != nil {
-			log.Printf("error matching %s against rules for namespace %s: %s", roleArn, namespace, err)
+			o.log.Error(err, "error matching role arn against rules for namespace", "role_arn", roleArn, "namespace", namespace)
 		} else if allowed {
 			return true
 		}
@@ -376,7 +382,7 @@ func (o *AWSOperator) writeToVault(namespace, serviceAccount string, data map[st
 	}); err != nil {
 		return err
 	}
-	log.Printf("Wrote policy %s for serviceaccount: %s/%s", n, namespace, serviceAccount)
+	o.log.Info("Wrote policy", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
 	// Create kubernetes auth backend role
 	if _, err := o.VaultClient.Logical().Write("auth/"+o.KubernetesAuthBackend+"/role/"+n, map[string]interface{}{
@@ -387,13 +393,13 @@ func (o *AWSOperator) writeToVault(namespace, serviceAccount string, data map[st
 	}); err != nil {
 		return err
 	}
-	log.Printf("Wrote kubernetes auth backend role: %s for serviceaccount: %s/%s", n, namespace, serviceAccount)
+	o.log.Info("Wrote kubernetes auth backend role", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
 	// Create aws secret backend role
 	if _, err := o.VaultClient.Logical().Write(o.AWSPath+"/roles/"+n, data); err != nil {
 		return err
 	}
-	log.Printf("Wrote aws secret backend role: %s for serviceaccount: %s/%s", n, namespace, serviceAccount)
+	o.log.Info("Wrote aws secret backend role", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
 	return nil
 }
@@ -406,20 +412,20 @@ func (o *AWSOperator) removeFromVault(namespace, serviceAccount string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Deleted AWS backend role: %s", n)
+	o.log.Info("Deleted AWS backend role", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
 	_, err = o.VaultClient.Logical().Delete("auth/" + o.KubernetesAuthBackend + "/role/" + n)
 
 	if err != nil {
 		return err
 	}
-	log.Printf("Deleted Kubernetes auth role: %s", n)
+	o.log.Info("Deleted Kubernetes auth role", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
 	_, err = o.VaultClient.Logical().Delete("sys/policy/" + n)
 	if err != nil {
 		return err
 	}
-	log.Printf("Deleted policy: %s", n)
+	o.log.Info("Deleted policy", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
 	return nil
 
