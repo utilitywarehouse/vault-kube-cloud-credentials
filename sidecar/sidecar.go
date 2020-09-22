@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	log = ctrl.Log.WithName("sidecar").WithName("aws")
+	log = ctrl.Log.WithName("sidecar")
 )
 
 // Config configures the sidecar
