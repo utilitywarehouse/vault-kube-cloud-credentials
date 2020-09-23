@@ -11,12 +11,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
-	// Enables all auth methods for the kube client
-
 	"path/filepath"
 	"strings"
 	"text/template"
 
+	// Enables all auth methods for the kube client
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
