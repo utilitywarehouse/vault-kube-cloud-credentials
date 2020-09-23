@@ -16,6 +16,23 @@ type GCPCredentials struct {
 	AccessToken  string `json:"access_token"`
 	ExpiresInSec int    `json:"expires_in"`
 	TokenType    string `json:"token_type"`
+
+	// expiresAt is the time that the credentials expire. The duration until
+	// this time is inserted into ExpiresInSec when marshalling into JSON.
+	expiresAt time.Time
+}
+
+// MarshalJSON overrides the value of ExpiresInSec with the duration until
+// expiresAt
+func (gc *GCPCredentials) MarshalJSON() ([]byte, error) {
+	type Alias GCPCredentials
+	return json.Marshal(&struct {
+		ExpiresInSec int `json:"expires_in"`
+		*Alias
+	}{
+		ExpiresInSec: int(time.Until(gc.expiresAt).Seconds()),
+		Alias:        (*Alias)(gc),
+	})
 }
 
 // metadata is information that is used to masquerade as the GCE metadata server
@@ -74,17 +91,19 @@ func (gpc *GCPProviderConfig) credentials(client *vault.Client) (interface{}, ti
 		return nil, -1, err
 	}
 
+	expiresAt := time.Unix(expiresAtSeconds, 0)
+
 	log.Info("new gcp credentials",
-		"expiration", time.Unix(expiresAtSeconds, 0).Format("2006-01-02 15:04:05"),
+		"expiration", expiresAt.Format("2006-01-02 15:04:05"),
 		"project", gpc.metadata.project,
 		"service_account_email", gpc.metadata.email,
 		"scopes", gpc.metadata.scopes,
 	)
 
 	return &GCPCredentials{
-		AccessToken:  secret.Data["token"].(string),
-		ExpiresInSec: int(tokenTTL),
-		TokenType:    "Bearer",
+		AccessToken: secret.Data["token"].(string),
+		TokenType:   "Bearer",
+		expiresAt:   expiresAt,
 	}, leaseDuration, nil
 }
 
