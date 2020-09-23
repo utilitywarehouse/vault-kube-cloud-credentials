@@ -35,15 +35,15 @@ func (gc *GCPCredentials) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// metadata is information that is used to masquerade as the GCE metadata server
-type metadata struct {
+// gceMetadata is information that is used to masquerade as the GCE metadata server
+type gceMetadata struct {
 	project string
 	email   string
 	scopes  []string
 }
 
-// serviceAccountDetails are returned by calls to computeMetadata/v1/instance/service-accounts/
-type serviceAccountDetails struct {
+// gceServiceAccountDetails are returned by calls to computeMetadata/v1/instance/service-accounts/
+type gceServiceAccountDetails struct {
 	Aliases []string `json:"aliases"`
 	Email   string   `json:"email"`
 	Scopes  []string `json:"scopes"`
@@ -55,7 +55,7 @@ type GCPProviderConfig struct {
 	GcpPath    string
 	GcpRoleSet string
 
-	metadata *metadata
+	metadata *gceMetadata
 }
 
 // credentialsPath returns the path to serve the credentials on
@@ -148,7 +148,7 @@ func (gpc *GCPProviderConfig) updateMetadata(client *vault.Client) error {
 		return fmt.Errorf("service_account_email is not a string")
 	}
 
-	gpc.metadata = &metadata{
+	gpc.metadata = &gceMetadata{
 		email:   email,
 		project: project,
 		scopes:  scopes,
@@ -181,15 +181,15 @@ func (gpc *GCPProviderConfig) setupAdditionalEndpoints(r *mux.Router) {
 			w.Write([]byte("default/\n" + gpc.metadata.email + "/\n"))
 			return
 		}
-		data, err := json.Marshal(map[string]*serviceAccountDetails{
-			"default": &serviceAccountDetails{
+		data, err := json.Marshal(map[string]*gceServiceAccountDetails{
+			"default": &gceServiceAccountDetails{
 				Aliases: []string{
 					"default",
 				},
 				Email:  gpc.metadata.email,
 				Scopes: gpc.metadata.scopes,
 			},
-			gpc.metadata.email: &serviceAccountDetails{
+			gpc.metadata.email: &gceServiceAccountDetails{
 				Aliases: []string{
 					"default",
 				},
@@ -215,7 +215,7 @@ func (gpc *GCPProviderConfig) setupAdditionalEndpoints(r *mux.Router) {
 			w.Write([]byte("aliases\nemail\nidentity\nscopes\ntoken\n"))
 			return
 		}
-		data, err := json.Marshal(&serviceAccountDetails{
+		data, err := json.Marshal(&gceServiceAccountDetails{
 			Aliases: []string{
 				"default",
 			},
