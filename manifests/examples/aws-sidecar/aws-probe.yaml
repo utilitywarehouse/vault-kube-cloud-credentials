@@ -20,7 +20,7 @@ spec:
       serviceAccountName: aws-probe
       containers:
         - name: aws-credentials
-          image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.5.0
+          image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.5.1
           args:
             - aws-sidecar
             - -role=$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
