@@ -186,7 +186,13 @@ func main() {
 			TokenPath: *flagAWSKubeTokenPath,
 		}
 
-		if err := sidecar.New(sidecarConfig).Run(); err != nil {
+		s, err := sidecar.New(sidecarConfig)
+		if err != nil {
+			log.Error(err, "error creating sidecar")
+			os.Exit(1)
+		}
+
+		if err := s.Run(); err != nil {
 			log.Error(err, "error running sidecar")
 			os.Exit(1)
 		}
@@ -227,7 +233,13 @@ func main() {
 			TokenPath: *flagGCPKubeTokenPath,
 		}
 
-		if err := sidecar.New(sidecarConfig).Run(); err != nil {
+		s, err := sidecar.New(sidecarConfig)
+		if err != nil {
+			log.Error(err, "error creating sidecar")
+			os.Exit(1)
+		}
+
+		if err := s.Run(); err != nil {
 			log.Error(err, "error running sidecar")
 			os.Exit(1)
 		}
