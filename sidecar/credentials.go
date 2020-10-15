@@ -1,6 +1,7 @@
 package sidecar
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"time"
@@ -70,12 +71,16 @@ func (cr *credentialsRenewer) renew() (interface{}, time.Duration, error) {
 	if err != nil {
 		return nil, -1, err
 	}
-	secret, err := cr.vaultClient.Logical().Write("auth/"+cr.kubePath+"/login", map[string]interface{}{
+	loginPath := "auth/" + cr.kubePath + "/login"
+	secret, err := cr.vaultClient.Logical().Write(loginPath, map[string]interface{}{
 		"jwt":  string(jwt),
 		"role": cr.kubeRole,
 	})
 	if err != nil {
 		return nil, -1, err
+	}
+	if secret.Auth == nil {
+		return nil, -1, fmt.Errorf("no authentication information attached to the response from %s", loginPath)
 	}
 	cr.vaultClient.SetToken(secret.Auth.ClientToken)
 
