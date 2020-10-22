@@ -23,25 +23,11 @@ spec:
           image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.5.1
           args:
             - gcp-sidecar
-            - -roleset=$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
-            - -kube-auth-role=$(ENVIRONMENT)-$(POD_NAMESPACE)-$(POD_SERVICE_ACCOUNT)
           env:
             - name: VAULT_ADDR
               value: "https://vault.example-namespace:8200"
             - name: VAULT_CACERT
               value: "/etc/tls/ca.crt"
-            - name: POD_SERVICE_ACCOUNT
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.serviceAccountName
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            # This value corresponds to the this variable:
-            # https://github.com/utilitywarehouse/tf_kube_creds_provider_via_vault/blob/master/gcp/variables.tf#L1-L3
-            - name: ENVIRONMENT
-              value: exp-1
           volumeMounts:
             - name: vault-tls
               mountPath: /etc/tls

@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go v0.66.0 // indirect
 	github.com/Azure/go-autorest/autorest v0.11.6 // indirect
 	github.com/aws/aws-sdk-go v1.34.29
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0 // indirect
 	github.com/golang/snappy v0.0.2 // indirect
