@@ -9,9 +9,7 @@ import (
 // ProviderConfig provides generic methods for retrieving and serving
 // credentials from vault for a cloud provider
 type ProviderConfig interface {
-	credentialsPath() string
-	credentials(client *vault.Client) (interface{}, time.Duration, error)
-	secretData() map[string][]string
-	secretPath() string
-	setupAdditionalEndpoints(r *mux.Router)
+	ready() bool
+	renew(client *vault.Client) (time.Duration, error)
+	setupEndpoints(r *mux.Router)
 }

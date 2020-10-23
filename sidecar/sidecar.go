@@ -1,7 +1,6 @@
 package sidecar
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -70,13 +69,9 @@ func (s *Sidecar) Run() error {
 	// attempts
 	rand.Seed(int64(time.Now().Nanosecond()))
 
-	// This channel communicates changes in credentials between the renewer
-	// goroutine and the http server
-	var credentials interface{}
-
 	go func() {
 		for {
-			creds, duration, err := s.renew()
+			duration, err := s.renew()
 			if err != nil {
 				d := s.backoff.Duration()
 				log.Error(err, "error renewing credentials", "backoff", d)
@@ -85,16 +80,14 @@ func (s *Sidecar) Run() error {
 			}
 			s.backoff.Reset()
 
-			credentials = creds
-
 			// Sleep until its time to renew the creds
 			time.Sleep(sleepDuration(duration))
 		}
 	}()
 
-	// Block until the first credentials are delivered
+	// Block until the provider is ready to serve credentials
 	for {
-		if credentials != nil {
+		if s.ProviderConfig.ready() {
 			break
 		}
 	}
@@ -108,14 +101,8 @@ func (s *Sidecar) Run() error {
 		ReadyAlways()),
 	)
 
-	// Serve credentials at the appropriate path for the provider
-	r.HandleFunc(s.ProviderConfig.credentialsPath(), func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		enc := json.NewEncoder(w)
-		enc.Encode(credentials)
-	})
-
-	s.ProviderConfig.setupAdditionalEndpoints(r)
+	// Add provider-specific endpoints
+	s.ProviderConfig.setupEndpoints(r)
 
 	log.Info("webserver is listening", "address", s.ListenAddress)
 
@@ -123,16 +110,16 @@ func (s *Sidecar) Run() error {
 }
 
 // renew the credentials
-func (s *Sidecar) renew() (interface{}, time.Duration, error) {
+func (s *Sidecar) renew() (time.Duration, error) {
 	// Reload vault configuration from the environment
 	if err := s.vaultConfig.ReadEnvironment(); err != nil {
-		return nil, -1, err
+		return -1, err
 	}
 
 	// Login to Vault via kube SA
 	jwt, err := ioutil.ReadFile(s.TokenPath)
 	if err != nil {
-		return nil, -1, err
+		return -1, err
 	}
 	loginPath := "auth/" + s.KubeAuthPath + "/login"
 	secret, err := s.vaultClient.Logical().Write(loginPath, map[string]interface{}{
@@ -140,18 +127,18 @@ func (s *Sidecar) renew() (interface{}, time.Duration, error) {
 		"role": s.KubeAuthRole,
 	})
 	if err != nil {
-		return nil, -1, err
+		return -1, err
 	}
 	if secret == nil {
-		return nil, -1, fmt.Errorf("no secret returned by %s", loginPath)
+		return -1, fmt.Errorf("no secret returned by %s", loginPath)
 	}
 	if secret.Auth == nil {
-		return nil, -1, fmt.Errorf("no authentication information attached to the response from %s", loginPath)
+		return -1, fmt.Errorf("no authentication information attached to the response from %s", loginPath)
 	}
 	s.vaultClient.SetToken(secret.Auth.ClientToken)
 
 	// Retrieve credentials for the provider
-	return s.ProviderConfig.credentials(s.vaultClient)
+	return s.ProviderConfig.renew(s.vaultClient)
 }
 
 // Sleep for 1/3 of the lease duration with a random jitter to discourage syncronised API calls from
