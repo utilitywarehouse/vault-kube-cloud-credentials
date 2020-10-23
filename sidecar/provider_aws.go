@@ -22,9 +22,9 @@ type AWSCredentials struct {
 // AWSProviderConfig provides methods that allow the sidecar to retrieve and
 // serve AWS credentials from vault for the given configuration
 type AWSProviderConfig struct {
-	AwsPath    string
-	AwsRoleArn string
-	AwsRole    string
+	Path    string
+	RoleArn string
+	Role    string
 
 	creds *AWSCredentials
 }
@@ -34,12 +34,12 @@ type AWSProviderConfig struct {
 func (apc *AWSProviderConfig) renew(client *vault.Client) (time.Duration, error) {
 	// Get a credentials secret from vault for the role
 	var secretData map[string][]string
-	if apc.AwsRoleArn != "" {
+	if apc.RoleArn != "" {
 		secretData = map[string][]string{
-			"role_arn": []string{apc.AwsRoleArn},
+			"role_arn": []string{apc.RoleArn},
 		}
 	}
-	secret, err := client.Logical().ReadWithData(apc.AwsPath+"/sts/"+apc.AwsRole, secretData)
+	secret, err := client.Logical().ReadWithData(apc.Path+"/sts/"+apc.Role, secretData)
 	if err != nil {
 		return -1, err
 	}

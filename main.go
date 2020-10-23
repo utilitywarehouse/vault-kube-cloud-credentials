@@ -179,9 +179,9 @@ func main() {
 			KubeAuthRole:  kubeAuthRole,
 			ListenAddress: *flagAWSListenAddr,
 			ProviderConfig: &sidecar.AWSProviderConfig{
-				AwsPath:    *flagAWSBackend,
-				AwsRoleArn: *flagAWSRoleArn,
-				AwsRole:    awsRole,
+				Path:    *flagAWSBackend,
+				RoleArn: *flagAWSRoleArn,
+				Role:    awsRole,
 			},
 			TokenPath: *flagAWSKubeTokenPath,
 		}
@@ -227,8 +227,8 @@ func main() {
 			KubeAuthRole:  kubeAuthRole,
 			ListenAddress: *flagGCPListenAddr,
 			ProviderConfig: &sidecar.GCPProviderConfig{
-				GcpPath:    *flagGCPBackend,
-				GcpRoleSet: gcpRoleSet,
+				Path:    *flagGCPBackend,
+				RoleSet: gcpRoleSet,
 			},
 			TokenPath: *flagGCPKubeTokenPath,
 		}

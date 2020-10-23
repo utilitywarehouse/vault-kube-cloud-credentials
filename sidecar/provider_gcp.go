@@ -52,8 +52,8 @@ type gceServiceAccountDetails struct {
 // GCPProviderConfig provides methods that allow the sidecar to retrieve and
 // serve GCP credentials from vault for the given configuration
 type GCPProviderConfig struct {
-	GcpPath    string
-	GcpRoleSet string
+	Path    string
+	RoleSet string
 
 	creds    *GCPCredentials
 	metadata *gceMetadata
@@ -63,7 +63,7 @@ type GCPProviderConfig struct {
 // the configuration
 func (gpc *GCPProviderConfig) renew(client *vault.Client) (time.Duration, error) {
 	// Get a credentials secret from vault for the role
-	secret, err := client.Logical().Read(gpc.GcpPath + "/token/" + gpc.GcpRoleSet)
+	secret, err := client.Logical().Read(gpc.Path + "/token/" + gpc.RoleSet)
 	if err != nil {
 		return -1, err
 	}
@@ -105,7 +105,7 @@ func (gpc *GCPProviderConfig) renew(client *vault.Client) (time.Duration, error)
 
 // updateMetadata extracts metadata from the roleset in vault
 func (gpc *GCPProviderConfig) updateMetadata(client *vault.Client) error {
-	roleset, err := client.Logical().Read(gpc.GcpPath + "/roleset/" + gpc.GcpRoleSet)
+	roleset, err := client.Logical().Read(gpc.Path + "/roleset/" + gpc.RoleSet)
 	if err != nil {
 		return err
 	}
