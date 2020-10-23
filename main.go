@@ -25,18 +25,20 @@ var (
 	flagOperatorConfigFile      = operatorCommand.String("config-file", "", "Path to a configuration file")
 
 	awsSidecarCommand    = flag.NewFlagSet("aws-sidecar", flag.ExitOnError)
+	flagAWSPrefix        = awsSidecarCommand.String("prefix", "vkcc", "The prefix used by the operator to create the login and backend roles")
 	flagAWSBackend       = awsSidecarCommand.String("backend", "aws", "AWS secret backend path")
 	flagAWSRoleArn       = awsSidecarCommand.String("role-arn", "", "AWS role arn to assume")
-	flagAWSRole          = awsSidecarCommand.String("role", "", "AWS secret role (required)")
-	flagAWSKubeAuthRole  = awsSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role (required)")
+	flagAWSRole          = awsSidecarCommand.String("role", "", "AWS secret role, defaults to <prefix>_aws_<namespace>_<service-account>")
+	flagAWSKubeAuthRole  = awsSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role, defaults to <prefix>_aws_<namespace>_<service-account>")
 	flagAWSKubeBackend   = awsSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
 	flagAWSKubeTokenPath = awsSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
 	flagAWSListenAddr    = awsSidecarCommand.String("listen-address", "127.0.0.1:8000", "Listen address")
 
 	gcpSidecarCommand    = flag.NewFlagSet("gcp-sidecar", flag.ExitOnError)
+	flagGCPPrefix        = gcpSidecarCommand.String("prefix", "vkcc", "The prefix used by the operator to create the login and backend roles")
 	flagGCPBackend       = gcpSidecarCommand.String("backend", "gcp", "GCP secret backend path")
-	flagGCPRoleSet       = gcpSidecarCommand.String("roleset", "", "GCP secret roleset (required)")
-	flagGCPKubeAuthRole  = gcpSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role (required)")
+	flagGCPRoleSet       = gcpSidecarCommand.String("roleset", "", "GCP secret roleset, defaults to <prefix>_gcp_<namespace>_<service-account>")
+	flagGCPKubeAuthRole  = gcpSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role, defaults to <prefix>_gcp_<namespace>_<service-account>")
 	flagGCPKubeBackend   = gcpSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
 	flagGCPKubeTokenPath = gcpSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
 	flagGCPListenAddr    = gcpSidecarCommand.String("listen-address", "127.0.0.1:8000", "Listen address")
@@ -156,24 +158,30 @@ func main() {
 			os.Exit(1)
 		}
 
-		if *flagAWSKubeAuthRole == "" {
-			fmt.Print("error: must set -kube-auth-role\n")
+		tokenClaims, err := newKubeTokenClaimsFromFile(*flagAWSKubeTokenPath)
+		if err != nil {
+			log.Error(err, "error reading token from file", "file", *flagAWSKubeTokenPath)
 			os.Exit(1)
 		}
 
-		if *flagAWSRole == "" {
-			fmt.Print("error: must set -role\n")
-			os.Exit(1)
+		kubeAuthRole := *flagAWSKubeAuthRole
+		if kubeAuthRole == "" {
+			kubeAuthRole = *flagAWSPrefix + "_aws_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
+		}
+
+		awsRole := *flagAWSRole
+		if awsRole == "" {
+			awsRole = *flagAWSPrefix + "_aws_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
 		}
 
 		sidecarConfig := &sidecar.Config{
 			KubeAuthPath:  *flagAWSKubeBackend,
-			KubeAuthRole:  *flagAWSKubeAuthRole,
+			KubeAuthRole:  kubeAuthRole,
 			ListenAddress: *flagAWSListenAddr,
 			ProviderConfig: &sidecar.AWSProviderConfig{
 				AwsPath:    *flagAWSBackend,
 				AwsRoleArn: *flagAWSRoleArn,
-				AwsRole:    *flagAWSRole,
+				AwsRole:    awsRole,
 			},
 			TokenPath: *flagAWSKubeTokenPath,
 		}
@@ -192,23 +200,29 @@ func main() {
 			os.Exit(1)
 		}
 
-		if *flagGCPKubeAuthRole == "" {
-			fmt.Print("error: must set -kube-auth-role\n")
+		tokenClaims, err := newKubeTokenClaimsFromFile(*flagGCPKubeTokenPath)
+		if err != nil {
+			log.Error(err, "error reading token from file", "file", *flagGCPKubeTokenPath)
 			os.Exit(1)
 		}
 
-		if *flagGCPRoleSet == "" {
-			fmt.Print("error: must set -roleset\n")
-			os.Exit(1)
+		kubeAuthRole := *flagGCPKubeAuthRole
+		if kubeAuthRole == "" {
+			kubeAuthRole = *flagGCPPrefix + "_gcp_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
+		}
+
+		gcpRoleSet := *flagGCPRoleSet
+		if gcpRoleSet == "" {
+			gcpRoleSet = *flagGCPPrefix + "_gcp_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
 		}
 
 		sidecarConfig := &sidecar.Config{
 			KubeAuthPath:  *flagGCPKubeBackend,
-			KubeAuthRole:  *flagGCPKubeAuthRole,
+			KubeAuthRole:  kubeAuthRole,
 			ListenAddress: *flagGCPListenAddr,
 			ProviderConfig: &sidecar.GCPProviderConfig{
 				GcpPath:    *flagGCPBackend,
-				GcpRoleSet: *flagGCPRoleSet,
+				GcpRoleSet: gcpRoleSet,
 			},
 			TokenPath: *flagGCPKubeTokenPath,
 		}

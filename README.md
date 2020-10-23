@@ -82,17 +82,13 @@ Supported providers (secret engines):
 For `aws`:
 
 ```
-./vault-kube-cloud-credentials aws-sidecar \
-  -kube-auth-role=<kubernetes auth role> \
-  -aws-role=<aws secret role>
+./vault-kube-cloud-credentials aws-sidecar
 ```
 
 And `gcp`:
 
 ```
-./vault-kube-cloud-credentials gcp-sidecar \
-  -kube-auth-role=<kubernetes auth role> \
-  -gcp-roleset=<gcp secret roleset>
+./vault-kube-cloud-credentials gcp-sidecar
 ```
 
 Refer to the usage for more options:
