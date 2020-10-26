@@ -33,6 +33,7 @@ var (
 	flagAWSKubeBackend   = awsSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
 	flagAWSKubeTokenPath = awsSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
 	flagAWSListenAddr    = awsSidecarCommand.String("listen-address", "127.0.0.1:8000", "Listen address")
+	flagAWSOpsAddr       = awsSidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
 
 	gcpSidecarCommand    = flag.NewFlagSet("gcp-sidecar", flag.ExitOnError)
 	flagGCPPrefix        = gcpSidecarCommand.String("prefix", "vkcc", "The prefix used by the operator to create the login and backend roles")
@@ -42,6 +43,7 @@ var (
 	flagGCPKubeBackend   = gcpSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
 	flagGCPKubeTokenPath = gcpSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
 	flagGCPListenAddr    = gcpSidecarCommand.String("listen-address", "127.0.0.1:8000", "Listen address")
+	flagGCPOpsAddr       = gcpSidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
 
 	log = ctrl.Log.WithName("main")
 )
@@ -178,6 +180,7 @@ func main() {
 			KubeAuthPath:  *flagAWSKubeBackend,
 			KubeAuthRole:  kubeAuthRole,
 			ListenAddress: *flagAWSListenAddr,
+			OpsAddress:    *flagAWSOpsAddr,
 			ProviderConfig: &sidecar.AWSProviderConfig{
 				Path:    *flagAWSBackend,
 				RoleArn: *flagAWSRoleArn,
@@ -226,6 +229,7 @@ func main() {
 			KubeAuthPath:  *flagGCPKubeBackend,
 			KubeAuthRole:  kubeAuthRole,
 			ListenAddress: *flagGCPListenAddr,
+			OpsAddress:    *flagGCPOpsAddr,
 			ProviderConfig: &sidecar.GCPProviderConfig{
 				Path:    *flagGCPBackend,
 				RoleSet: gcpRoleSet,

@@ -1,21 +1,19 @@
 package sidecar
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gorilla/mux"
+	rootcerts "github.com/hashicorp/go-rootcerts"
 	vault "github.com/hashicorp/vault/api"
-	"github.com/utilitywarehouse/go-operational/op"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	ctrl "sigs.k8s.io/controller-runtime"
-)
-
-const (
-	appName        = "vault-kube-cloud-credentials"
-	appDescription = "Fetch cloud provider credentials from vault on behalf of a Kubernetes service account and serve them via HTTP."
 )
 
 var (
@@ -28,6 +26,7 @@ type Config struct {
 	KubeAuthPath   string
 	KubeAuthRole   string
 	ListenAddress  string
+	OpsAddress     string
 	TokenPath      string
 }
 
@@ -35,14 +34,26 @@ type Config struct {
 // provided ProviderConfig
 type Sidecar struct {
 	*Config
-	backoff     *Backoff
-	vaultClient *vault.Client
-	vaultConfig *vault.Config
+	backoff        *Backoff
+	vaultClient    *vault.Client
+	vaultConfig    *vault.Config
+	vaultTLSConfig *tls.Config
 }
 
 // New returns a sidecar with the provided config
 func New(config *Config) (*Sidecar, error) {
 	vaultConfig := vault.DefaultConfig()
+
+	// Capture the TLS config of the Transport before it's wrapped and
+	// therefore unavailable. This is updated by reloadVaultCA.
+	vaultTLSConfig := vaultConfig.HttpClient.Transport.(*http.Transport).TLSClientConfig
+
+	vaultConfig.HttpClient.Transport = promhttp.InstrumentRoundTripperInFlight(promVaultRequestsInFlight,
+		promhttp.InstrumentRoundTripperCounter(promVaultRequests,
+			promhttp.InstrumentRoundTripperDuration(promVaultRequestsDuration, vaultConfig.HttpClient.Transport),
+		),
+	)
+
 	vaultClient, err := vault.NewClient(vaultConfig)
 	if err != nil {
 		return nil, err
@@ -55,10 +66,11 @@ func New(config *Config) (*Sidecar, error) {
 	}
 
 	return &Sidecar{
-		Config:      config,
-		backoff:     backoff,
-		vaultConfig: vaultConfig,
-		vaultClient: vaultClient,
+		Config:         config,
+		backoff:        backoff,
+		vaultConfig:    vaultConfig,
+		vaultClient:    vaultClient,
+		vaultTLSConfig: vaultTLSConfig,
 	}, nil
 }
 
@@ -73,6 +85,7 @@ func (s *Sidecar) Run() error {
 		for {
 			duration, err := s.renew()
 			if err != nil {
+				promErrors.Inc()
 				d := s.backoff.Duration()
 				log.Error(err, "error renewing credentials", "backoff", d)
 				time.Sleep(d)
@@ -80,39 +93,49 @@ func (s *Sidecar) Run() error {
 			}
 			s.backoff.Reset()
 
+			promRenewals.Inc()
+			promExpiry.Set(float64(time.Now().Add(duration).Unix()))
+
 			// Sleep until its time to renew the creds
 			time.Sleep(sleepDuration(duration))
 		}
 	}()
 
-	// Block until the provider is ready to serve credentials
-	for {
-		if s.ProviderConfig.ready() {
-			break
-		}
-	}
+	errors := make(chan error)
 
+	// Serve operational endpoints
+	sr := mux.NewRouter()
+	sr.PathPrefix("/__/").Handler(statusHandler)
+
+	go func() {
+		log.Info("operational status server is listening", "address", s.OpsAddress)
+		errors <- http.ListenAndServe(s.OpsAddress, sr)
+	}()
+
+	// Serve provider endpoints
 	r := mux.NewRouter()
-
-	// Add operational endpoints
-	r.Handle("/__/", op.NewHandler(op.NewStatus(appName, appDescription).
-		AddOwner("system", "#infra").
-		AddLink("readme", fmt.Sprintf("https://github.com/utilitywarehouse/%s/blob/master/README.md", appName)).
-		ReadyAlways()),
-	)
-
-	// Add provider-specific endpoints
 	s.ProviderConfig.setupEndpoints(r)
 
-	log.Info("webserver is listening", "address", s.ListenAddress)
+	go func() {
+		// Block until the provider is ready to serve credentials
+		for {
+			if s.ProviderConfig.ready() {
+				break
+			}
+		}
+		log.Info("webserver is listening", "address", s.ListenAddress)
+		errors <- http.ListenAndServe(s.ListenAddress, r)
+	}()
 
-	return http.ListenAndServe(s.ListenAddress, r)
+	err := <-errors
+
+	return err
 }
 
 // renew the credentials
 func (s *Sidecar) renew() (time.Duration, error) {
-	// Reload vault configuration from the environment
-	if err := s.vaultConfig.ReadEnvironment(); err != nil {
+	// Reload vault CA from the environment
+	if err := s.reloadVaultCA(); err != nil {
 		return -1, err
 	}
 
@@ -137,11 +160,40 @@ func (s *Sidecar) renew() (time.Duration, error) {
 	}
 	s.vaultClient.SetToken(secret.Auth.ClientToken)
 
-	// Retrieve credentials for the provider
+	// Renew credentials for the provider
 	return s.ProviderConfig.renew(s.vaultClient)
 }
 
-// Sleep for 1/3 of the lease duration with a random jitter to discourage syncronised API calls from
+// reloadVaultCA updates the tls.Config used by the vault client with the CA
+// cert(s) pointed to by VAULT_CACERT or VAULT_CAPATH. This makes the sidecar
+// tolerant of CA renewals.
+func (s *Sidecar) reloadVaultCA() error {
+	var envCACert string
+	var envCAPath string
+
+	if v := os.Getenv(vault.EnvVaultCACert); v != "" {
+		envCACert = v
+	}
+
+	if v := os.Getenv(vault.EnvVaultCAPath); v != "" {
+		envCAPath = v
+	}
+
+	if envCACert != "" || envCAPath != "" {
+		err := rootcerts.ConfigureTLS(s.vaultTLSConfig, &rootcerts.Config{
+			CAPath: envCAPath,
+			CAFile: envCACert,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
+// Sleep for 1/3 of the lease duration with a random jitter to discourage synchronised API calls from
 // multiple instances of the application
 func sleepDuration(leaseDuration time.Duration) time.Duration {
 	return time.Duration((float64(leaseDuration.Nanoseconds()) * 1 / 3) * (rand.Float64() + 1.50) / 2)
