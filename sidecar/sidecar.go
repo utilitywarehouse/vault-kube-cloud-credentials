@@ -26,6 +26,7 @@ type Config struct {
 	KubeAuthPath   string
 	KubeAuthRole   string
 	ListenAddress  string
+	OpsAddress     string
 	TokenPath      string
 }
 
@@ -100,24 +101,35 @@ func (s *Sidecar) Run() error {
 		}
 	}()
 
-	// Block until the provider is ready to serve credentials
-	for {
-		if s.ProviderConfig.ready() {
-			break
-		}
-	}
+	errors := make(chan error)
 
+	// Serve operational endpoints
+	sr := mux.NewRouter()
+	sr.PathPrefix("/__/").Handler(statusHandler)
+
+	go func() {
+		log.Info("operational status server is listening", "address", s.OpsAddress)
+		errors <- http.ListenAndServe(s.OpsAddress, sr)
+	}()
+
+	// Serve provider endpoints
 	r := mux.NewRouter()
-
-	// Add operational endpoints
-	r.PathPrefix("/__/").Handler(statusHandler)
-
-	// Add provider-specific endpoints
 	s.ProviderConfig.setupEndpoints(r)
 
-	log.Info("webserver is listening", "address", s.ListenAddress)
+	go func() {
+		// Block until the provider is ready to serve credentials
+		for {
+			if s.ProviderConfig.ready() {
+				break
+			}
+		}
+		log.Info("webserver is listening", "address", s.ListenAddress)
+		errors <- http.ListenAndServe(s.ListenAddress, r)
+	}()
 
-	return http.ListenAndServe(s.ListenAddress, r)
+	err := <-errors
+
+	return err
 }
 
 // renew the credentials
