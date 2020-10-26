@@ -2,11 +2,13 @@ package sidecar
 
 import (
 	"encoding/json"
-	"github.com/gorilla/mux"
-	vault "github.com/hashicorp/vault/api"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"time"
+
+	"github.com/gorilla/mux"
+	vault "github.com/hashicorp/vault/api"
 )
 
 // AWSCredentials are the credentials served by the API
@@ -20,23 +22,26 @@ type AWSCredentials struct {
 // AWSProviderConfig provides methods that allow the sidecar to retrieve and
 // serve AWS credentials from vault for the given configuration
 type AWSProviderConfig struct {
-	AwsPath    string
-	AwsRoleArn string
-	AwsRole    string
+	Path    string
+	RoleArn string
+	Role    string
+
+	creds *AWSCredentials
 }
 
-// credentialsPath returns the path to serve the credentials on
-func (apc *AWSProviderConfig) credentialsPath() string {
-	return "/credentials"
-}
-
-// credentials retrieves credentials from vault for the secret indicated in
+// renew retrieves credentials from vault for the secret indicated in
 // the configuration
-func (apc *AWSProviderConfig) credentials(client *vault.Client) (interface{}, time.Duration, error) {
+func (apc *AWSProviderConfig) renew(client *vault.Client) (time.Duration, error) {
 	// Get a credentials secret from vault for the role
-	secret, err := client.Logical().ReadWithData(apc.secretPath(), apc.secretData())
+	var secretData map[string][]string
+	if apc.RoleArn != "" {
+		secretData = map[string][]string{
+			"role_arn": []string{apc.RoleArn},
+		}
+	}
+	secret, err := client.Logical().ReadWithData(apc.Path+"/sts/"+apc.Role, secretData)
 	if err != nil {
-		return nil, -1, err
+		return -1, err
 	}
 
 	// Convert the secret's lease duration into a time.Duration
@@ -48,47 +53,49 @@ func (apc *AWSProviderConfig) credentials(client *vault.Client) (interface{}, ti
 	if err = req.SetJSONBody(map[string]interface{}{
 		"lease_id": secret.LeaseID,
 	}); err != nil {
-		return nil, -1, err
+		return -1, err
 	}
 	resp, err := client.RawRequest(req)
 	if err != nil {
-		return nil, -1, err
+		return -1, err
 	}
 	err = json.NewDecoder(resp.Body).Decode(&l)
 	io.Copy(ioutil.Discard, resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		return nil, -1, err
+		return -1, err
 	}
 
 	log.Info("new aws credentials", "access_key", secret.Data["access_key"].(string), "expiration", l.Data.ExpireTime.Format("2006-01-02 15:04:05"))
 
-	return &AWSCredentials{
+	apc.creds = &AWSCredentials{
 		AccessKeyID:     secret.Data["access_key"].(string),
 		SecretAccessKey: secret.Data["secret_key"].(string),
 		Token:           secret.Data["security_token"].(string),
 		Expiration:      l.Data.ExpireTime,
-	}, leaseDuration, nil
-}
-
-// secretData returns the data to pass to vault when retrieving the AWS role secret
-func (apc *AWSProviderConfig) secretData() map[string][]string {
-	if apc.AwsRoleArn != "" {
-		return map[string][]string{
-			"role_arn": []string{apc.AwsRoleArn},
-		}
 	}
-	return nil
+
+	return leaseDuration, nil
 }
 
-// secretPath is the path in vault to retrieve the AWS role from
-func (apc *AWSProviderConfig) secretPath() string {
-	return apc.AwsPath + "/sts/" + apc.AwsRole
+// setupEndpoints adds a handler that serves the credentials at /credentials
+func (apc *AWSProviderConfig) setupEndpoints(r *mux.Router) {
+	r.HandleFunc("/credentials", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		enc := json.NewEncoder(w)
+		enc.Encode(apc.creds)
+	})
 }
 
-// setupAdditionalEndpoints does nothing because there are no additional paths
-// necessary to override the AWS metadata services
-func (apc *AWSProviderConfig) setupAdditionalEndpoints(r *mux.Router) {}
+// ready indicates whether the provider is in a suitable state to serve
+// credentials
+func (apc *AWSProviderConfig) ready() bool {
+	if apc.creds != nil {
+		return true
+	}
+
+	return false
+}
 
 // lease represents the part of the response from /v1/sys/leases/lookup we care about (the expire time)
 type lease struct {

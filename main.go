@@ -179,14 +179,20 @@ func main() {
 			KubeAuthRole:  kubeAuthRole,
 			ListenAddress: *flagAWSListenAddr,
 			ProviderConfig: &sidecar.AWSProviderConfig{
-				AwsPath:    *flagAWSBackend,
-				AwsRoleArn: *flagAWSRoleArn,
-				AwsRole:    awsRole,
+				Path:    *flagAWSBackend,
+				RoleArn: *flagAWSRoleArn,
+				Role:    awsRole,
 			},
 			TokenPath: *flagAWSKubeTokenPath,
 		}
 
-		if err := sidecar.New(sidecarConfig).Run(); err != nil {
+		s, err := sidecar.New(sidecarConfig)
+		if err != nil {
+			log.Error(err, "error creating sidecar")
+			os.Exit(1)
+		}
+
+		if err := s.Run(); err != nil {
 			log.Error(err, "error running sidecar")
 			os.Exit(1)
 		}
@@ -221,13 +227,19 @@ func main() {
 			KubeAuthRole:  kubeAuthRole,
 			ListenAddress: *flagGCPListenAddr,
 			ProviderConfig: &sidecar.GCPProviderConfig{
-				GcpPath:    *flagGCPBackend,
-				GcpRoleSet: gcpRoleSet,
+				Path:    *flagGCPBackend,
+				RoleSet: gcpRoleSet,
 			},
 			TokenPath: *flagGCPKubeTokenPath,
 		}
 
-		if err := sidecar.New(sidecarConfig).Run(); err != nil {
+		s, err := sidecar.New(sidecarConfig)
+		if err != nil {
+			log.Error(err, "error creating sidecar")
+			os.Exit(1)
+		}
+
+		if err := s.Run(); err != nil {
 			log.Error(err, "error running sidecar")
 			os.Exit(1)
 		}
