@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -17,6 +18,25 @@ type AWSCredentials struct {
 	SecretAccessKey string    `json:"SecretAccessKey"`
 	Token           string    `json:"Token"`
 	Expiration      time.Time `json:"Expiration"`
+}
+
+// awsError is the expected format for errors returned by the credentials
+// endpoint
+type awsError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// write populates the error fields and writes itself to the http response. The
+// code is converted from the form returned by http.StatusText ("Not Found")
+// into the form expected in the response ("NotFound")
+func (e *awsError) write(w http.ResponseWriter, msg string, code int) error {
+	e.Code = strings.ReplaceAll(http.StatusText(code), " ", "")
+	e.Message = msg
+
+	w.Header().Set("Content-Type", "application/json")
+
+	return json.NewEncoder(w).Encode(e)
 }
 
 // AWSProviderConfig provides methods that allow the sidecar to retrieve and
@@ -83,7 +103,14 @@ func (apc *AWSProviderConfig) setupEndpoints(r *mux.Router) {
 	r.HandleFunc("/credentials", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		enc := json.NewEncoder(w)
-		enc.Encode(apc.creds)
+		if apc.creds == nil {
+			httpError(w, r, "Credentials not initialized", http.StatusNotFound, &awsError{})
+			return
+		}
+		if err := enc.Encode(apc.creds); err != nil {
+			httpError(w, r, "Error encoding credentials response as json", http.StatusInternalServerError, &awsError{})
+			return
+		}
 	})
 }
 
