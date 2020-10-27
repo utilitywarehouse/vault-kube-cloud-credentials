@@ -22,6 +22,25 @@ type GCPCredentials struct {
 	expiresAt time.Time
 }
 
+// gcpError is the format of errors returned by the GCE metadata endpoint when
+// the response is expected to be JSON
+type gcpError struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
+}
+
+// write populates the error fields and writes itself to the http response. The
+// code is converted from the form returned by http.StatusText ("Not Found")
+// into the form expected in the response ("not_found")
+func (e *gcpError) write(w http.ResponseWriter, msg string, code int) error {
+	e.Error = strings.ReplaceAll(strings.ToLower(http.StatusText(code)), " ", "_")
+	e.ErrorDescription = msg
+
+	w.Header().Set("Content-Type", "application/json")
+
+	return json.NewEncoder(w).Encode(e)
+}
+
 // MarshalJSON overrides the value of ExpiresInSec with the duration until
 // expiresAt
 func (gc *GCPCredentials) MarshalJSON() ([]byte, error) {
@@ -157,15 +176,29 @@ func (gpc *GCPProviderConfig) ready() bool {
 func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/token", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		enc := json.NewEncoder(w)
-		enc.Encode(gpc.creds)
+		if gpc.creds == nil {
+			httpError(w, r, "Credentials not initialized", http.StatusNotFound, &gcpError{})
+			return
+		}
+		if err := json.NewEncoder(w).Encode(gpc.creds); err != nil {
+			httpError(w, r, "Error encoding credentials response as json", http.StatusInternalServerError, &gcpError{})
+			return
+		}
 	})
 	r.HandleFunc("/computeMetadata/v1/project/project-id", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
+		if gpc.metadata == nil {
+			httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+			return
+		}
 		w.Write([]byte(gpc.metadata.project))
 	})
 	r.HandleFunc("/computeMetadata/v1/project/numeric-project-id", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
+		if gpc.metadata == nil {
+			httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+			return
+		}
 		w.Write([]byte(`000000000000`))
 	})
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts", func(w http.ResponseWriter, r *http.Request) {
@@ -173,15 +206,24 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 	})
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			httpErrorText(w, r, "Can't parse query arguments", http.StatusInternalServerError)
 			return
 		}
 		if v := r.Form["recursive"]; len(v) != 1 || v[0] != "true" {
 			w.Header().Set("Content-Type", "application/text")
+			if gpc.metadata == nil {
+				httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+				return
+			}
 			w.Write([]byte("default/\n" + gpc.metadata.email + "/\n"))
 			return
 		}
-		data, err := json.Marshal(map[string]*gceServiceAccountDetails{
+		w.Header().Set("Content-Type", "application/json")
+		if gpc.metadata == nil {
+			httpError(w, r, "Metadata not initialized", http.StatusNotFound, &gcpError{})
+			return
+		}
+		if err := json.NewEncoder(w).Encode(map[string]*gceServiceAccountDetails{
 			"default": &gceServiceAccountDetails{
 				Aliases: []string{
 					"default",
@@ -196,39 +238,36 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 				Email:  gpc.metadata.email,
 				Scopes: gpc.metadata.scopes,
 			},
-		})
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			w.Header().Set("Content-Type", "application/text")
+		}); err != nil {
+			httpError(w, r, "Error encoding service accounts request as json", http.StatusNotFound, &gcpError{})
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
 	})
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/text")
 		if err := r.ParseForm(); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			httpErrorText(w, r, "Can't parse query arguments", http.StatusInternalServerError)
 			return
 		}
 		if v := r.Form["recursive"]; len(v) != 1 || v[0] != "true" {
-			w.Header().Set("Content-Type", "application/text")
 			w.Write([]byte("aliases\nemail\nidentity\nscopes\ntoken\n"))
 			return
 		}
-		data, err := json.Marshal(&gceServiceAccountDetails{
+		w.Header().Set("Content-Type", "application/json")
+		if gpc.metadata == nil {
+			httpError(w, r, "Metadata not initialized", http.StatusNotFound, &gcpError{})
+			return
+		}
+		if err := json.NewEncoder(w).Encode(&gceServiceAccountDetails{
 			Aliases: []string{
 				"default",
 			},
 			Email:  gpc.metadata.email,
 			Scopes: gpc.metadata.scopes,
-		})
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			w.Header().Set("Content-Type", "application/text")
+		}); err != nil {
+			httpError(w, r, "Error encoding service account request as json", http.StatusNotFound, &gcpError{})
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
 	})
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/aliases", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
@@ -236,10 +275,18 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 	})
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/email", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
+		if gpc.metadata == nil {
+			httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+			return
+		}
 		w.Write([]byte(gpc.metadata.email))
 	})
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/scopes", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
+		if gpc.metadata == nil {
+			httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+			return
+		}
 		w.Write([]byte(strings.Join(gpc.metadata.scopes, "\n")))
 	})
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
