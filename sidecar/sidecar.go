@@ -116,6 +116,17 @@ func (s *Sidecar) Run() error {
 	r := mux.NewRouter()
 	s.ProviderConfig.setupEndpoints(r)
 
+	// Instrument the handler with metrics
+	ir := promhttp.InstrumentHandlerInFlight(promRequestsInFlight,
+		promhttp.InstrumentHandlerDuration(promRequestsDuration,
+			promhttp.InstrumentHandlerCounter(promRequests,
+				promhttp.InstrumentHandlerResponseSize(promResponseSize,
+					promhttp.InstrumentHandlerRequestSize(promRequestSize, r),
+				),
+			),
+		),
+	)
+
 	go func() {
 		// Block until the provider is ready to serve credentials
 		for {
@@ -124,7 +135,7 @@ func (s *Sidecar) Run() error {
 			}
 		}
 		log.Info("webserver is listening", "address", s.ListenAddress)
-		errors <- http.ListenAndServe(s.ListenAddress, r)
+		errors <- http.ListenAndServe(s.ListenAddress, ir)
 	}()
 
 	err := <-errors

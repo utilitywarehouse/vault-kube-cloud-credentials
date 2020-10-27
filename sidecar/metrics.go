@@ -23,6 +23,34 @@ var (
 		Name: prometheus.BuildFQName(promNamespace, promSubsystem, "renewals_total"),
 		Help: "Total count of renewals",
 	})
+	promRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: prometheus.BuildFQName(promNamespace, promSubsystem, "requests_total"),
+		Help: "Total count of requests handled, by code and method",
+	},
+		[]string{"code", "method"},
+	)
+	promRequestsInFlight = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: prometheus.BuildFQName(promNamespace, promSubsystem, "in_flight_requests"),
+		Help: "Number of requests currently in-flight",
+	})
+	promRequestsDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: prometheus.BuildFQName(promNamespace, promSubsystem, "request_duration_seconds"),
+		Help: "A histogram of request latencies",
+	},
+		[]string{},
+	)
+	promRequestSize = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: prometheus.BuildFQName(promNamespace, promSubsystem, "request_size_bytes"),
+		Help: "A histogram of request sizes for requests",
+	},
+		[]string{},
+	)
+	promResponseSize = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: prometheus.BuildFQName(promNamespace, promSubsystem, "response_size_bytes"),
+		Help: "A histogram of response sizes for requests",
+	},
+		[]string{},
+	)
 	promErrors = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: prometheus.BuildFQName(promNamespace, promSubsystem, "errors_total"),
 		Help: "Total count of errors",
@@ -50,6 +78,11 @@ var (
 			AddMetrics(
 				promExpiry,
 				promRenewals,
+				promRequests,
+				promRequestsDuration,
+				promRequestsInFlight,
+				promRequestSize,
+				promResponseSize,
 				promErrors,
 				promVaultRequests,
 				promVaultRequestsDuration,
