@@ -177,18 +177,18 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/token", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if gpc.creds == nil {
-			httpError(w, r, "Credentials not initialized", http.StatusNotFound, &gcpError{})
+			httpError(w, "Credentials not initialized", http.StatusNotFound, &gcpError{})
 			return
 		}
 		if err := json.NewEncoder(w).Encode(gpc.creds); err != nil {
-			httpError(w, r, "Error encoding credentials response as json", http.StatusInternalServerError, &gcpError{})
+			httpError(w, "Error encoding credentials response as json", http.StatusInternalServerError, &gcpError{})
 			return
 		}
 	})
 	r.HandleFunc("/computeMetadata/v1/project/project-id", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
 		if gpc.metadata == nil {
-			httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+			http.Error(w, "Metadata not initialized", http.StatusNotFound)
 			return
 		}
 		w.Write([]byte(gpc.metadata.project))
@@ -196,7 +196,7 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 	r.HandleFunc("/computeMetadata/v1/project/numeric-project-id", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
 		if gpc.metadata == nil {
-			httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+			http.Error(w, "Metadata not initialized", http.StatusNotFound)
 			return
 		}
 		w.Write([]byte(`000000000000`))
@@ -206,13 +206,13 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 	})
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpErrorText(w, r, "Can't parse query arguments", http.StatusInternalServerError)
+			http.Error(w, "Can't parse query arguments", http.StatusInternalServerError)
 			return
 		}
 		if v := r.Form["recursive"]; len(v) != 1 || v[0] != "true" {
 			w.Header().Set("Content-Type", "application/text")
 			if gpc.metadata == nil {
-				httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+				http.Error(w, "Metadata not initialized", http.StatusNotFound)
 				return
 			}
 			w.Write([]byte("default/\n" + gpc.metadata.email + "/\n"))
@@ -220,7 +220,7 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if gpc.metadata == nil {
-			httpError(w, r, "Metadata not initialized", http.StatusNotFound, &gcpError{})
+			httpError(w, "Metadata not initialized", http.StatusNotFound, &gcpError{})
 			return
 		}
 		if err := json.NewEncoder(w).Encode(map[string]*gceServiceAccountDetails{
@@ -239,14 +239,14 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 				Scopes: gpc.metadata.scopes,
 			},
 		}); err != nil {
-			httpError(w, r, "Error encoding service accounts request as json", http.StatusNotFound, &gcpError{})
+			httpError(w, "Error encoding service accounts request as json", http.StatusNotFound, &gcpError{})
 			return
 		}
 	})
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
 		if err := r.ParseForm(); err != nil {
-			httpErrorText(w, r, "Can't parse query arguments", http.StatusInternalServerError)
+			http.Error(w, "Can't parse query arguments", http.StatusInternalServerError)
 			return
 		}
 		if v := r.Form["recursive"]; len(v) != 1 || v[0] != "true" {
@@ -255,7 +255,7 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if gpc.metadata == nil {
-			httpError(w, r, "Metadata not initialized", http.StatusNotFound, &gcpError{})
+			httpError(w, "Metadata not initialized", http.StatusNotFound, &gcpError{})
 			return
 		}
 		if err := json.NewEncoder(w).Encode(&gceServiceAccountDetails{
@@ -265,7 +265,7 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 			Email:  gpc.metadata.email,
 			Scopes: gpc.metadata.scopes,
 		}); err != nil {
-			httpError(w, r, "Error encoding service account request as json", http.StatusNotFound, &gcpError{})
+			httpError(w, "Error encoding service account request as json", http.StatusNotFound, &gcpError{})
 			return
 		}
 	})
@@ -276,7 +276,7 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/email", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
 		if gpc.metadata == nil {
-			httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+			http.Error(w, "Metadata not initialized", http.StatusNotFound)
 			return
 		}
 		w.Write([]byte(gpc.metadata.email))
@@ -284,7 +284,7 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/scopes", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/text")
 		if gpc.metadata == nil {
-			httpErrorText(w, r, "Metadata not initialized", http.StatusNotFound)
+			http.Error(w, "Metadata not initialized", http.StatusNotFound)
 			return
 		}
 		w.Write([]byte(strings.Join(gpc.metadata.scopes, "\n")))

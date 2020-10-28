@@ -22,17 +22,10 @@ type providerError interface {
 }
 
 // httpError writes the given message and code to the response in the form of
-// the providerError. It also logs the error.
-func httpError(w http.ResponseWriter, r *http.Request, msg string, code int, e providerError) {
-	log.Error(nil, msg, "url", r.URL)
+// the providerError
+func httpError(w http.ResponseWriter, msg string, code int, e providerError) {
 	w.WriteHeader(code)
 	if err := e.write(w, msg, code); err != nil {
 		log.Error(err, "Error writing error to response")
 	}
-}
-
-// httpErrorText wraps http.Error with logging
-func httpErrorText(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	log.Error(nil, msg, "url", r.URL)
-	http.Error(w, msg, code)
 }

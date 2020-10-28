@@ -116,12 +116,14 @@ func (s *Sidecar) Run() error {
 	r := mux.NewRouter()
 	s.ProviderConfig.setupEndpoints(r)
 
-	// Instrument the handler with metrics
-	ir := promhttp.InstrumentHandlerInFlight(promRequestsInFlight,
-		promhttp.InstrumentHandlerDuration(promRequestsDuration,
-			promhttp.InstrumentHandlerCounter(promRequests,
-				promhttp.InstrumentHandlerResponseSize(promResponseSize,
-					promhttp.InstrumentHandlerRequestSize(promRequestSize, r),
+	// Instrument the handler with logging and metrics
+	ir := instrumentHandlerLogging(
+		promhttp.InstrumentHandlerInFlight(promRequestsInFlight,
+			promhttp.InstrumentHandlerDuration(promRequestsDuration,
+				promhttp.InstrumentHandlerCounter(promRequests,
+					promhttp.InstrumentHandlerResponseSize(promResponseSize,
+						promhttp.InstrumentHandlerRequestSize(promRequestSize, r),
+					),
 				),
 			),
 		),
@@ -202,6 +204,31 @@ func (s *Sidecar) reloadVaultCA() error {
 
 	return nil
 
+}
+
+// responseLogger wraps a http.ResponseWriter, recording elements of the
+// response for the purpose of logging
+type responseLogger struct {
+	http.ResponseWriter
+	code int
+}
+
+// WriteHeader records the status code so that it can be logged
+func (rl *responseLogger) WriteHeader(code int) {
+	rl.code = code
+	rl.ResponseWriter.WriteHeader(code)
+}
+
+// instrumentHandlerLogging wraps a http.Handler with logging
+func instrumentHandlerLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			rl := &responseLogger{ResponseWriter: w}
+			start := time.Now()
+			next.ServeHTTP(rl, r)
+			log.Info("served request", "path", r.URL.EscapedPath(), "code", rl.code, "method", r.Method, "duration", time.Since(start))
+		},
+	)
 }
 
 // Sleep for 1/3 of the lease duration with a random jitter to discourage synchronised API calls from
