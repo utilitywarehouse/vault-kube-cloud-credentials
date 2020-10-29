@@ -104,11 +104,11 @@ func (apc *AWSProviderConfig) setupEndpoints(r *mux.Router) {
 		w.Header().Set("Content-Type", "application/json")
 		enc := json.NewEncoder(w)
 		if apc.creds == nil {
-			httpError(w, r, "Credentials not initialized", http.StatusNotFound, &awsError{})
+			httpError(w, "Credentials not initialized", http.StatusNotFound, &awsError{})
 			return
 		}
 		if err := enc.Encode(apc.creds); err != nil {
-			httpError(w, r, "Error encoding credentials response as json", http.StatusInternalServerError, &awsError{})
+			httpError(w, "Error encoding credentials response as json", http.StatusInternalServerError, &awsError{})
 			return
 		}
 	})
