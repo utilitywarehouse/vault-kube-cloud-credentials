@@ -54,8 +54,8 @@ func TestAWSOperatorReconcile(t *testing.T) {
 			VaultClient:           core.Client,
 			VaultConfig:           vaultapi.DefaultConfig(),
 		},
-		AWSPath:    "aws",
 		DefaultTTL: 3600 * time.Second,
+		AWSPath:    "aws",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -276,20 +276,19 @@ func TestOperatorReconcileBlocked(t *testing.T) {
 			VaultConfig:           vaultapi.DefaultConfig(),
 		},
 		AWSPath: "aws",
+		Rules: AWSRules{
+			AWSRule{
+				NamespacePatterns: []string{
+					"notbar",
+				},
+				RoleNamePatterns: []string{
+					"not-foobar-role",
+				},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	a.rules = AWSRules{
-		AWSRule{
-			NamespacePatterns: []string{
-				"notbar",
-			},
-			RoleNamePatterns: []string{
-				"not-foobar-role",
-			},
-		},
 	}
 
 	// This shouldn't create the objects in vault
@@ -458,7 +457,8 @@ func TestAWSOperatorAdmitEvent(t *testing.T) {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	o := &AWSOperator{
-		log: ctrl.Log.WithName("operator").WithName("aws"),
+		AWSOperatorConfig: &AWSOperatorConfig{},
+		log:               ctrl.Log.WithName("operator").WithName("aws"),
 	}
 
 	// Test that without any rules any valid event is admitted
@@ -474,7 +474,7 @@ func TestAWSOperatorAdmitEvent(t *testing.T) {
 	// iam)
 	assert.False(t, o.admitEvent("foobar", "arn:aws:iam:111111111111:role/foobar-role"))
 
-	o.rules = AWSRules{
+	o.Rules = AWSRules{
 		AWSRule{
 			NamespacePatterns: []string{
 				"foo",

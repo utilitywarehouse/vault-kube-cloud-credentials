@@ -3,10 +3,14 @@ kind: Kustomization
 bases:
   # github.com/utilitywarehouse/vault-kube-cloud-credentials/manifests/operator/cluster?ref=master
   - ../../operator/cluster
-  # github.com/utilitywarehouse/vault-kube-cloud-credentials/manifests/operator/cluster?ref=master
+  # github.com/utilitywarehouse/vault-kube-cloud-credentials/manifests/operator/namespaced?ref=master
   - ../../operator/namespaced
 resources:
   - rbac.yaml
+configMapGenerator:
+  - name: vault-kube-cloud-credentials-operator
+    files:
+      - config.yaml=resources/operator-config.yaml
 secretGenerator:
   - name: vault
     envs:
