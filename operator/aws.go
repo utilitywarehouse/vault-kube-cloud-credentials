@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io/ioutil"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/go-logr/logr"
@@ -141,7 +142,8 @@ func (ar *AWSRule) matchesRoleName(roleName string) (bool, error) {
 // AWSOperatorConfig provides configuration when creating a new Operator
 type AWSOperatorConfig struct {
 	*Config
-	AWSPath string
+	AWSPath    string
+	DefaultTTL time.Duration
 }
 
 // AWSOperator is responsible for creating Kubernetes auth roles and AWS secret
@@ -278,7 +280,7 @@ func (o *AWSOperator) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	err = o.writeToVault(req.Namespace, req.Name, map[string]interface{}{
-		"default_sts_ttl": 900,
+		"default_sts_ttl": int(o.DefaultTTL.Seconds()),
 		"role_arns":       []string{roleArn},
 		"credential_type": "assumed_role",
 	})

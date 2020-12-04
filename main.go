@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	vault "github.com/hashicorp/vault/api"
 	"github.com/utilitywarehouse/vault-kube-cloud-credentials/operator"
@@ -23,6 +24,7 @@ var (
 	flagOperatorKubeAuthBackend = operatorCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
 	flagOperatorMetricsAddr     = operatorCommand.String("metrics-address", ":8080", "Metrics address")
 	flagOperatorConfigFile      = operatorCommand.String("config-file", "", "Path to a configuration file")
+	flagOperatorDefaultTTL      = operatorCommand.Duration("default-sts-ttl", 900*time.Second, "Default ttl for AWS credentials")
 
 	awsSidecarCommand    = flag.NewFlagSet("aws-sidecar", flag.ExitOnError)
 	flagAWSPrefix        = awsSidecarCommand.String("prefix", "vkcc", "The prefix used by the operator to create the login and backend roles")
@@ -127,7 +129,8 @@ func main() {
 				VaultClient:           vaultClient,
 				VaultConfig:           vaultConfig,
 			},
-			AWSPath: *flagOperatorAWSBackend,
+			AWSPath:    *flagOperatorAWSBackend,
+			DefaultTTL: *flagOperatorDefaultTTL,
 		})
 		if err != nil {
 			log.Error(err, "error creating operator")

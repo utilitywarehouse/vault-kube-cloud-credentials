@@ -3,6 +3,7 @@ package operator
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	vaultkube "github.com/hashicorp/vault-plugin-auth-kubernetes"
 	vaultapi "github.com/hashicorp/vault/api"
@@ -52,7 +53,8 @@ func TestAWSOperatorReconcile(t *testing.T) {
 			VaultClient:           core.Client,
 			VaultConfig:           vaultapi.DefaultConfig(),
 		},
-		AWSPath: "aws",
+		AWSPath:    "aws",
+		DefaultTTL: 3600 * time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +87,7 @@ func TestAWSOperatorReconcile(t *testing.T) {
 	awsRole, err := core.Client.Logical().Read("aws/roles/vkcc_aws_bar_foo")
 	assert.NoError(t, err)
 	assert.Equal(t, []interface{}{"arn:aws:iam::111111111111:role/foobar-role"}, awsRole.Data["role_arns"].([]interface{}))
-	assert.Equal(t, json.Number("900"), awsRole.Data["default_sts_ttl"].(json.Number))
+	assert.Equal(t, json.Number("3600"), awsRole.Data["default_sts_ttl"].(json.Number))
 
 	// UPDATE: test that Reconcile updates the role when the annotation
 	// changes
