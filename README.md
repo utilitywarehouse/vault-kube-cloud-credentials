@@ -103,3 +103,14 @@ applicably:
 
 - `VAULT_ADDR`: the address of the Vault server (default: `https://127.0.0.1:8200`)
 - `VAULT_CACERT`: path to a CA certificate file used to verify the Vault server's certificate
+
+## Renewal
+
+The sidecar will retrieve new credentials after 1/3 of the current TTL has
+elapsed. So, if the credentials are valid for an hour then the sidecar will
+attempt to fetch a new set after about 20 minutes. A random jitter is applied
+to the refresh period to avoid tight synchronisation between multiple sidecar 
+instances.
+
+If the refresh fails then the sidecar will continue to make attempts at renewal,
+with an exponential backoff.
