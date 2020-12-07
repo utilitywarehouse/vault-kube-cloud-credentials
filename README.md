@@ -1,5 +1,7 @@
 # vault-kube-cloud-credentials
 
+[![Docker Repository on Quay](https://quay.io/repository/utilitywarehouse/vault-kube-cloud-credentials/status "Docker Repository on Quay")](https://quay.io/repository/utilitywarehouse/vault-kube-cloud-credentials)
+
 This is a system for retrieving cloud IAM credentials from Vault for use in
 Kubernetes.
 
