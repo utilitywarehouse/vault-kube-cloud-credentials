@@ -135,6 +135,7 @@ func (s *Sidecar) Run() error {
 			if s.ProviderConfig.ready() {
 				break
 			}
+			time.Sleep(1 * time.Second)
 		}
 		log.Info("webserver is listening", "address", s.ListenAddress)
 		errors <- http.ListenAndServe(s.ListenAddress, ir)
