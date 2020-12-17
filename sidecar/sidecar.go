@@ -130,13 +130,9 @@ func (s *Sidecar) Run() error {
 	)
 
 	go func() {
-		// Block until the provider is ready to serve credentials
-		for {
-			if s.ProviderConfig.ready() {
-				break
-			}
-			time.Sleep(1 * time.Second)
-		}
+		// Block until the provider has retrieved the first set of
+		// credentials
+		<-s.ProviderConfig.ready()
 		log.Info("webserver is listening", "address", s.ListenAddress)
 		errors <- http.ListenAndServe(s.ListenAddress, ir)
 	}()
