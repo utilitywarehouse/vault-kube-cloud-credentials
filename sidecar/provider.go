@@ -11,7 +11,7 @@ import (
 // ProviderConfig provides generic methods for retrieving and serving
 // credentials from vault for a cloud provider
 type ProviderConfig interface {
-	ready() bool
+	ready() <-chan bool
 	renew(client *vault.Client) (time.Duration, error)
 	setupEndpoints(r *mux.Router)
 }

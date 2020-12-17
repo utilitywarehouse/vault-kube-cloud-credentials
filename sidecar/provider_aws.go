@@ -46,6 +46,7 @@ type AWSProviderConfig struct {
 	RoleArn string
 	Role    string
 
+	r     chan bool
 	creds *AWSCredentials
 }
 
@@ -88,11 +89,17 @@ func (apc *AWSProviderConfig) renew(client *vault.Client) (time.Duration, error)
 
 	log.Info("new aws credentials", "access_key", secret.Data["access_key"].(string), "expiration", l.Data.ExpireTime.Format("2006-01-02 15:04:05"))
 
+	firstRun := apc.creds == nil
+
 	apc.creds = &AWSCredentials{
 		AccessKeyID:     secret.Data["access_key"].(string),
 		SecretAccessKey: secret.Data["secret_key"].(string),
 		Token:           secret.Data["security_token"].(string),
 		Expiration:      l.Data.ExpireTime,
+	}
+
+	if firstRun {
+		apc.r <- true
 	}
 
 	return leaseDuration, nil
@@ -114,14 +121,10 @@ func (apc *AWSProviderConfig) setupEndpoints(r *mux.Router) {
 	})
 }
 
-// ready indicates whether the provider is in a suitable state to serve
-// credentials
-func (apc *AWSProviderConfig) ready() bool {
-	if apc.creds != nil {
-		return true
-	}
-
-	return false
+// ready returns a channel that will be written to when the provider first
+// enters a state where it's ready to serve credentials
+func (apc *AWSProviderConfig) ready() <-chan bool {
+	return apc.r
 }
 
 // lease represents the part of the response from /v1/sys/leases/lookup we care about (the expire time)
