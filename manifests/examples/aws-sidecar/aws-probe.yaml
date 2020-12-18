@@ -20,7 +20,7 @@ spec:
       serviceAccountName: aws-probe
       containers:
         - name: aws-credentials
-          image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.6.2
+          image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.6.3
           args:
             - aws-sidecar
           env:
