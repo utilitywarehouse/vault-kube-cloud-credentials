@@ -74,7 +74,6 @@ type GCPProviderConfig struct {
 	Path    string
 	RoleSet string
 
-	r        chan bool
 	creds    *GCPCredentials
 	metadata *gceMetadata
 }
@@ -114,16 +113,10 @@ func (gpc *GCPProviderConfig) renew(client *vault.Client) (time.Duration, error)
 		"scopes", gpc.metadata.scopes,
 	)
 
-	firstRun := gpc.creds == nil
-
 	gpc.creds = &GCPCredentials{
 		AccessToken: secret.Data["token"].(string),
 		TokenType:   "Bearer",
 		expiresAt:   expiresAt,
-	}
-
-	if firstRun {
-		gpc.r <- true
 	}
 
 	return leaseDuration, nil
@@ -166,12 +159,6 @@ func (gpc *GCPProviderConfig) updateMetadata(client *vault.Client) error {
 	}
 
 	return nil
-}
-
-// ready returns a channel that will be written to when the provider first
-// enters a state where it's ready to serve credentials
-func (gpc *GCPProviderConfig) ready() <-chan bool {
-	return gpc.r
 }
 
 // setupEndpoints adds the endpoints required to masquerade
