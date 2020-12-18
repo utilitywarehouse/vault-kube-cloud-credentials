@@ -81,7 +81,10 @@ func (s *Sidecar) Run() error {
 	// attempts
 	rand.Seed(int64(time.Now().Nanosecond()))
 
+	ready := make(chan bool, 1)
+
 	go func() {
+		firstRun := true
 		for {
 			duration, err := s.renew()
 			if err != nil {
@@ -95,6 +98,11 @@ func (s *Sidecar) Run() error {
 
 			promRenewals.Inc()
 			promExpiry.Set(float64(time.Now().Add(duration).Unix()))
+
+			if firstRun {
+				ready <- true
+				firstRun = false
+			}
 
 			// Sleep until its time to renew the creds
 			time.Sleep(sleepDuration(duration))
@@ -132,7 +140,7 @@ func (s *Sidecar) Run() error {
 	go func() {
 		// Block until the provider has retrieved the first set of
 		// credentials
-		<-s.ProviderConfig.ready()
+		<-ready
 		log.Info("webserver is listening", "address", s.ListenAddress)
 		errors <- http.ListenAndServe(s.ListenAddress, ir)
 	}()
