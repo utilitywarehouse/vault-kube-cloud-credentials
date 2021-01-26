@@ -43,7 +43,7 @@ spec:
               done
           env:
             - name: GCE_METADATA_HOST
-              value: "127.0.0.1:8000"
+              value: "127.0.0.1:8098"
       volumes:
         - name: vault-tls
           configMap:
