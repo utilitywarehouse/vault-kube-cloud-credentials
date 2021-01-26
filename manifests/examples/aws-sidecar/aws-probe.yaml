@@ -43,7 +43,7 @@ spec:
               done
           env:
             - name: AWS_CONTAINER_CREDENTIALS_FULL_URI
-              value: "http://127.0.0.1:8000/credentials"
+              value: "http://127.0.0.1:8098/credentials"
             - name: AWS_REGION
               value: "eu-west-1"
       volumes:

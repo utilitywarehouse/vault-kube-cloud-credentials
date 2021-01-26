@@ -34,7 +34,7 @@ var (
 	flagAWSKubeAuthRole  = awsSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role, defaults to <prefix>_aws_<namespace>_<service-account>")
 	flagAWSKubeBackend   = awsSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
 	flagAWSKubeTokenPath = awsSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
-	flagAWSListenAddr    = awsSidecarCommand.String("listen-address", "127.0.0.1:8000", "Listen address")
+	flagAWSListenAddr    = awsSidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
 	flagAWSOpsAddr       = awsSidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
 
 	gcpSidecarCommand    = flag.NewFlagSet("gcp-sidecar", flag.ExitOnError)
@@ -44,7 +44,7 @@ var (
 	flagGCPKubeAuthRole  = gcpSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role, defaults to <prefix>_gcp_<namespace>_<service-account>")
 	flagGCPKubeBackend   = gcpSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
 	flagGCPKubeTokenPath = gcpSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
-	flagGCPListenAddr    = gcpSidecarCommand.String("listen-address", "127.0.0.1:8000", "Listen address")
+	flagGCPListenAddr    = gcpSidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
 	flagGCPOpsAddr       = gcpSidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
 
 	log = ctrl.Log.WithName("main")
