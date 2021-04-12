@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -163,20 +164,21 @@ func main() {
 			os.Exit(1)
 		}
 
-		tokenClaims, err := newKubeTokenClaimsFromFile(*flagAWSKubeTokenPath)
-		if err != nil {
-			log.Error(err, "error reading token from file", "file", *flagAWSKubeTokenPath)
+		pns := os.Getenv("POD_NAMESPACE")
+		psa := os.Getenv("POD_SERVICE_ACCOUNT")
+		if pns == "" || psa == "" {
+			log.Error(errors.New("POD_NAMESPACE and POD_SERVICE_ACCOUNT need to be set"), "")
 			os.Exit(1)
 		}
 
 		kubeAuthRole := *flagAWSKubeAuthRole
 		if kubeAuthRole == "" {
-			kubeAuthRole = *flagAWSPrefix + "_aws_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
+			kubeAuthRole = *flagAWSPrefix + "_aws_" + pns + "_" + psa
 		}
 
 		awsRole := *flagAWSRole
 		if awsRole == "" {
-			awsRole = *flagAWSPrefix + "_aws_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
+			awsRole = *flagAWSPrefix + "_aws_" + pns + "_" + psa
 		}
 
 		sidecarConfig := &sidecar.Config{
@@ -212,20 +214,21 @@ func main() {
 			os.Exit(1)
 		}
 
-		tokenClaims, err := newKubeTokenClaimsFromFile(*flagGCPKubeTokenPath)
-		if err != nil {
-			log.Error(err, "error reading token from file", "file", *flagGCPKubeTokenPath)
+		pns := os.Getenv("POD_NAMESPACE")
+		psa := os.Getenv("POD_SERVICE_ACCOUNT")
+		if pns == "" || psa == "" {
+			log.Error(errors.New("POD_NAMESPACE and POD_SERVICE_ACCOUNT need to be set"), "")
 			os.Exit(1)
 		}
 
 		kubeAuthRole := *flagGCPKubeAuthRole
 		if kubeAuthRole == "" {
-			kubeAuthRole = *flagGCPPrefix + "_gcp_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
+			kubeAuthRole = *flagGCPPrefix + "_gcp_" + pns + "_" + psa
 		}
 
 		gcpRoleSet := *flagGCPRoleSet
 		if gcpRoleSet == "" {
-			gcpRoleSet = *flagGCPPrefix + "_gcp_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
+			gcpRoleSet = *flagGCPPrefix + "_gcp_" + pns + "_" + psa
 		}
 
 		sidecarConfig := &sidecar.Config{
