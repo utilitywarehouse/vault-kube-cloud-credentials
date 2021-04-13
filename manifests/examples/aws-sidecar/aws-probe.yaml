@@ -22,7 +22,8 @@ spec:
         - name: aws-credentials
           image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.6.3
           args:
-            - aws-sidecar
+            - sidecar
+            - -vault-role=dev_aws_$(POD_NAMESPACE)_$(POD_SERVICE_ACCOUNT)
           env:
             - name: VAULT_ADDR
               value: "https://vault.example-namespace:8200"
