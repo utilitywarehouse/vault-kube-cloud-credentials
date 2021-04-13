@@ -8,9 +8,9 @@ Kubernetes.
 It's comprised of two parts:
 
 - An operator which will create a login role and a secret in Vault based on
-  service account annotations
-- A sidecar which retrieves the credentials from vault and serves them over
-  http, acting as a metadata endpoint for the given cloud provider
+  Kubernetes ServiceAccount annotations
+- A sidecar which retrieves the credentials from Vault and serves them over
+  HTTP, acting as a metadata endpoint for the given cloud provider
 
 ## Operator
 
@@ -41,7 +41,7 @@ metadata:
 
 ### Config file
 
-You can control which service accounts can assume which roles based on their
+You can control which ServiceAccounts can assume which roles based on their
 namespace by passing a yaml file to the operator with the flag `-config-file`.
 
 For example, the following configuration allows service accounts in `kube-system` 
@@ -84,13 +84,13 @@ Supported providers (secret engines):
 For `aws`:
 
 ```
-./vault-kube-cloud-credentials aws-sidecar
+./vault-kube-cloud-credentials sidecar -vault-role=<prefix>_aws_<namespace>_<serviceaccount>
 ```
 
 And `gcp`:
 
 ```
-./vault-kube-cloud-credentials gcp-sidecar
+./vault-kube-cloud-credentials sidecar -vault-role=<prefix>_gcp_<namespace>_<serviceaccount>
 ```
 
 Refer to the usage for more options:
