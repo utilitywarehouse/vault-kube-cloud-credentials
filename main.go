@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -26,28 +27,22 @@ var (
 	flagOperatorConfigFile      = operatorCommand.String("config-file", "", "Path to a configuration file")
 	flagOperatorDefaultTTL      = operatorCommand.Duration("default-sts-ttl", 900*time.Second, "Default ttl for AWS credentials")
 
-	awsSidecarCommand    = flag.NewFlagSet("aws-sidecar", flag.ExitOnError)
-	flagAWSPrefix        = awsSidecarCommand.String("prefix", "vkcc", "The prefix used by the operator to create the login and backend roles")
-	flagAWSBackend       = awsSidecarCommand.String("backend", "aws", "AWS secret backend path")
-	flagAWSRoleArn       = awsSidecarCommand.String("role-arn", "", "AWS role arn to assume")
-	flagAWSRole          = awsSidecarCommand.String("role", "", "AWS secret role, defaults to <prefix>_aws_<namespace>_<service-account>")
-	flagAWSKubeAuthRole  = awsSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role, defaults to <prefix>_aws_<namespace>_<service-account>")
-	flagAWSKubeBackend   = awsSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
-	flagAWSKubeTokenPath = awsSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
-	flagAWSListenAddr    = awsSidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
-	flagAWSOpsAddr       = awsSidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
-
-	gcpSidecarCommand    = flag.NewFlagSet("gcp-sidecar", flag.ExitOnError)
-	flagGCPPrefix        = gcpSidecarCommand.String("prefix", "vkcc", "The prefix used by the operator to create the login and backend roles")
-	flagGCPBackend       = gcpSidecarCommand.String("backend", "gcp", "GCP secret backend path")
-	flagGCPRoleSet       = gcpSidecarCommand.String("roleset", "", "GCP secret roleset, defaults to <prefix>_gcp_<namespace>_<service-account>")
-	flagGCPKubeAuthRole  = gcpSidecarCommand.String("kube-auth-role", "", "Kubernetes auth role, defaults to <prefix>_gcp_<namespace>_<service-account>")
-	flagGCPKubeBackend   = gcpSidecarCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
-	flagGCPKubeTokenPath = gcpSidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
-	flagGCPListenAddr    = gcpSidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
-	flagGCPOpsAddr       = gcpSidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
+	sidecarCommand           = flag.NewFlagSet("sidecar", flag.ExitOnError)
+	flagSidecarKubeTokenPath = sidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
+	flagSidecarListenAddr    = sidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
+	flagSidecarOpsAddr       = sidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
+	flagSidecarVaultRole     = sidecarCommand.String("vault-role", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
 
 	log = ctrl.Log.WithName("main")
+
+	// example: exp-1_aws_sys-prom_thanos-compact
+	//
+	// 0: exp-1_aws_sys-prom_thanos-compact
+	// 1: prefix (Vault instance) example values: "exp-1", "dev", "prod"
+	// 2: provider (AWS|GCP)
+	// 3: kubernetes_namespace
+	// 4: kubernetes_service_account
+	vaultRoleRegex = regexp.MustCompile(`([-\w]+)_([-\w]+)_([-\w]+)_([-\w]+)`)
 )
 
 func usage() {
@@ -57,8 +52,7 @@ func usage() {
 
 Commands:
   operator      Run the operator
-  aws-sidecar   Sidecar for AWS credentials
-  gcp-sidecar   Sidecar for GCP credentials
+  sidecar       Sidecar for provider credentials
 `, os.Args[0])
 }
 
@@ -76,12 +70,9 @@ func main() {
 	case "operator":
 		logOpts.BindFlags(operatorCommand)
 		operatorCommand.Parse(os.Args[2:])
-	case "aws-sidecar":
-		logOpts.BindFlags(awsSidecarCommand)
-		awsSidecarCommand.Parse(os.Args[2:])
-	case "gcp-sidecar":
-		logOpts.BindFlags(gcpSidecarCommand)
-		gcpSidecarCommand.Parse(os.Args[2:])
+	case "sidecar":
+		logOpts.BindFlags(sidecarCommand)
+		sidecarCommand.Parse(os.Args[2:])
 	default:
 		usage()
 		return
@@ -157,87 +148,38 @@ func main() {
 		return
 	}
 
-	if awsSidecarCommand.Parsed() {
-		if len(awsSidecarCommand.Args()) > 0 {
-			awsSidecarCommand.PrintDefaults()
+	if sidecarCommand.Parsed() {
+		if len(sidecarCommand.Args()) > 0 {
+			sidecarCommand.PrintDefaults()
 			os.Exit(1)
 		}
 
-		tokenClaims, err := newKubeTokenClaimsFromFile(*flagAWSKubeTokenPath)
-		if err != nil {
-			log.Error(err, "error reading token from file", "file", *flagAWSKubeTokenPath)
-			os.Exit(1)
-		}
+		var pc sidecar.ProviderConfig
+		provider := vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultRole)[2]
 
-		kubeAuthRole := *flagAWSKubeAuthRole
-		if kubeAuthRole == "" {
-			kubeAuthRole = *flagAWSPrefix + "_aws_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
+		switch provider {
+		case "aws":
+			pc = &sidecar.AWSProviderConfig{
+				Path:    "aws",
+				RoleArn: "",
+				Role:    *flagSidecarVaultRole,
+			}
+		case "gcp":
+			pc = &sidecar.GCPProviderConfig{
+				Path:    "gcp",
+				RoleSet: *flagSidecarVaultRole,
+			}
+		default:
+			usage()
+			return
 		}
-
-		awsRole := *flagAWSRole
-		if awsRole == "" {
-			awsRole = *flagAWSPrefix + "_aws_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
-		}
-
 		sidecarConfig := &sidecar.Config{
-			KubeAuthPath:  *flagAWSKubeBackend,
-			KubeAuthRole:  kubeAuthRole,
-			ListenAddress: *flagAWSListenAddr,
-			OpsAddress:    *flagAWSOpsAddr,
-			ProviderConfig: &sidecar.AWSProviderConfig{
-				Path:    *flagAWSBackend,
-				RoleArn: *flagAWSRoleArn,
-				Role:    awsRole,
-			},
-			TokenPath: *flagAWSKubeTokenPath,
-		}
-
-		s, err := sidecar.New(sidecarConfig)
-		if err != nil {
-			log.Error(err, "error creating sidecar")
-			os.Exit(1)
-		}
-
-		if err := s.Run(); err != nil {
-			log.Error(err, "error running sidecar")
-			os.Exit(1)
-		}
-
-		return
-	}
-
-	if gcpSidecarCommand.Parsed() {
-		if len(gcpSidecarCommand.Args()) > 0 {
-			gcpSidecarCommand.PrintDefaults()
-			os.Exit(1)
-		}
-
-		tokenClaims, err := newKubeTokenClaimsFromFile(*flagGCPKubeTokenPath)
-		if err != nil {
-			log.Error(err, "error reading token from file", "file", *flagGCPKubeTokenPath)
-			os.Exit(1)
-		}
-
-		kubeAuthRole := *flagGCPKubeAuthRole
-		if kubeAuthRole == "" {
-			kubeAuthRole = *flagGCPPrefix + "_gcp_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
-		}
-
-		gcpRoleSet := *flagGCPRoleSet
-		if gcpRoleSet == "" {
-			gcpRoleSet = *flagGCPPrefix + "_gcp_" + tokenClaims.Namespace + "_" + tokenClaims.ServiceAccountName
-		}
-
-		sidecarConfig := &sidecar.Config{
-			KubeAuthPath:  *flagGCPKubeBackend,
-			KubeAuthRole:  kubeAuthRole,
-			ListenAddress: *flagGCPListenAddr,
-			OpsAddress:    *flagGCPOpsAddr,
-			ProviderConfig: &sidecar.GCPProviderConfig{
-				Path:    *flagGCPBackend,
-				RoleSet: gcpRoleSet,
-			},
-			TokenPath: *flagGCPKubeTokenPath,
+			KubeAuthPath:   "kubernetes",
+			KubeAuthRole:   *flagSidecarVaultRole,
+			ListenAddress:  *flagSidecarListenAddr,
+			OpsAddress:     *flagSidecarOpsAddr,
+			ProviderConfig: pc,
+			TokenPath:      *flagSidecarKubeTokenPath,
 		}
 
 		s, err := sidecar.New(sidecarConfig)

@@ -1,12 +1,11 @@
 module github.com/utilitywarehouse/vault-kube-cloud-credentials
 
-go 1.15
+go 1.16
 
 require (
 	cloud.google.com/go v0.70.0 // indirect
 	github.com/Azure/go-autorest/autorest v0.11.10 // indirect
 	github.com/aws/aws-sdk-go v1.35.16
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0 // indirect
 	github.com/golang/snappy v0.0.2 // indirect
@@ -24,7 +23,6 @@ require (
 	github.com/imdario/mergo v0.3.11 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
-	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.8.0
 	github.com/stretchr/testify v1.5.1
 	github.com/utilitywarehouse/go-operational v0.0.0-20190722153447-b0f3f6284543

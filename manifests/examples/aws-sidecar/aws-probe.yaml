@@ -22,12 +22,21 @@ spec:
         - name: aws-credentials
           image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.6.3
           args:
-            - aws-sidecar
+            - sidecar
+            - -vault-role=dev_aws_$(POD_NAMESPACE)_$(POD_SERVICE_ACCOUNT)
           env:
             - name: VAULT_ADDR
               value: "https://vault.example-namespace:8200"
             - name: VAULT_CACERT
               value: "/etc/tls/ca.crt"
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
           volumeMounts:
             - name: vault-tls
               mountPath: /etc/tls
