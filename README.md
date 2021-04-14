@@ -5,12 +5,13 @@
 <!-- vim-markdown-toc GFM -->
 
 * [Operator](#operator)
-	* [Requirements](#requirements)
-	* [Usage](#usage)
-	* [Config file](#config-file)
+  * [Requirements](#requirements)
+  * [Usage](#usage)
+  * [Config file](#config-file)
+  * [Role names](#role-names)
 * [Sidecars](#sidecars)
-	* [Usage](#usage-1)
-* [Renewal](#renewal)
+  * [Usage](#usage-1)
+  * [Renewal](#renewal)
 
 <!-- vim-markdown-toc -->
 
@@ -29,8 +30,8 @@ It's comprised of two parts:
 ### Requirements
 
 - A Vault server with:
-  * Kubernetes auth method, enabled and configured
-  * AWS secrets engine, enabled and configured
+  - Kubernetes auth method, enabled and configured
+  - AWS secrets engine, enabled and configured
 
 ### Usage
 
@@ -60,7 +61,7 @@ metadata:
 You can control which ServiceAccounts can assume which roles based on their
 namespace by passing a yaml file to the operator with the flag `-config-file`.
 
-For example, the following configuration allows service accounts in `kube-system` 
+For example, the following configuration allows service accounts in `kube-system`
 and namespaces prefixed with `system-` to assume roles under the `sysadmin/*` path,
 roles that begin with `sysadmin-` or a specific `org/s3-admin` role in the accounts
 `000000000000` and `111111111111`.
@@ -86,6 +87,25 @@ parameters are required.
 The pattern matching supports [shell file name
 patterns](https://golang.org/pkg/path/filepath/#Match).
 
+### Role names
+
+The operator creates objects in Vault with the following name structure:
+
+```
+<prefix>_<provider>_<namespace>_<serviceaccount>
+```
+
+The `<prefix>` portion is defined by the `-prefix` flag (default: `vkcc`) and
+serves as an identifier that can be useful when you have multiple Vault instances
+creating resources in the same cloud provider account. The prefix used here may be
+included in the name of the resources, allowing you to identify which Vault instance
+they belong to.
+
+Including `<provider>` avoids the potential for clashes in the situation where a
+service account requires credentials from multiple providers.
+
+The `<namespace>` and `<serviceaccount>` parts are self-explanatory.
+
 ## Sidecars
 
 ### Usage
@@ -95,7 +115,6 @@ Refer to the [examples](manifests/examples/) for reference Kubernetes deployment
 Or manifests to use with
 https://github.com/utilitywarehouse/k8s-sidecar-injector at
 [manifests/sidecar-injector](manifests/sidecar-injector)
-
 
 Supported providers (secret engines):
 
@@ -119,12 +138,12 @@ applicably:
 - `VAULT_ADDR`: the address of the Vault server (default: `https://127.0.0.1:8200`)
 - `VAULT_CACERT`: path to a CA certificate file used to verify the Vault server's certificate
 
-## Renewal
+### Renewal
 
 The sidecar will retrieve new credentials after 1/3 of the current TTL has
 elapsed. So, if the credentials are valid for an hour then the sidecar will
 attempt to fetch a new set after about 20 minutes. A random jitter is applied
-to the refresh period to avoid tight synchronisation between multiple sidecar 
+to the refresh period to avoid tight synchronisation between multiple sidecar
 instances.
 
 If the refresh fails then the sidecar will continue to make attempts at renewal,
