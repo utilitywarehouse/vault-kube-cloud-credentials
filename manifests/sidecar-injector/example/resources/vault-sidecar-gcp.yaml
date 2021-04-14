@@ -1,0 +1,5 @@
+name: vault-sidecar-gcp
+inherits: vault-sidecar-gcp-base.yaml
+env:
+  - name: VKAC_ENVIRONMENT
+    value: "dev"
