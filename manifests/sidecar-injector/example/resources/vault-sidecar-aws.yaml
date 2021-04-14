@@ -1,0 +1,5 @@
+name: vault-sidecar-aws
+inherits: vault-sidecar-aws-base.yaml
+env:
+  - name: VKAC_ENVIRONMENT
+    value: "dev"

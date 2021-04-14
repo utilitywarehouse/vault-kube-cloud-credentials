@@ -1,0 +1,67 @@
+name: vault-init-container-aws-base
+initContainers:
+  - name: vault-credentials
+    image: vault:1.6.0
+    command:
+      - sh
+      - -c
+      - |
+        echo '
+        exit_after_auth = true
+        auto_auth {
+                method "kubernetes" {
+                    mount_path = "auth/kubernetes"
+                    config = {
+                        role = "$(VKAC_ENVIRONMENT)_aws_$(POD_NAMESPACE)_$(POD_SERVICE_ACCOUNT)"
+                    }
+                }
+
+                sink "file" {
+                    config = {
+                        path = "/home/vault/.vault-token"
+                    }
+                }
+        }
+        template {
+            destination = "/etc/aws/credentials"
+            contents = <<EOT
+        {{ with secret "aws/sts/$(VKAC_ENVIRONMENT)_aws_$(POD_NAMESPACE)_$(POD_SERVICE_ACCOUNT)" -}}
+        [default]
+        aws_access_key_id={{ .Data.access_key }}
+        aws_secret_access_key={{ .Data.secret_key }}
+        aws_session_token={{ .Data.security_token }}
+        {{ end -}}
+        EOT
+        }
+        ' > config.hcl
+        /usr/bin/dumb-init -- vault agent -config=config.hcl
+    env:
+      - name: POD_NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      - name: POD_SERVICE_ACCOUNT
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.serviceAccountName
+      - name: VAULT_CACERT
+        value: "/etc/tls/ca.crt"
+      - name: VAULT_ADDR
+        value: "https://vault.sys-vault:8200"
+    volumeMounts:
+      - name: vault-aws-credentials
+        mountPath: /etc/aws
+      - name: vault-tls
+        mountPath: /etc/tls
+env:
+  - name: AWS_SHARED_CREDENTIALS_FILE
+    value: "/etc/aws/credentials"
+volumes:
+  - name: vault-aws-credentials
+    emptyDir: {}
+  - name: vault-tls
+    configMap:
+      name: vault-tls
+volumeMounts:
+  - name: vault-aws-credentials
+    mountPath: /etc/aws
