@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"io/ioutil"
+	"path/filepath"
+	"strings"
+	"text/template"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/arn"
@@ -11,10 +14,6 @@ import (
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-
-	"path/filepath"
-	"strings"
-	"text/template"
 
 	// Enables all auth methods for the kube client
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -191,7 +190,7 @@ func (o *AWSOperator) LoadConfig(file string) error {
 
 // Start is ran when the manager starts up. We're using it to clear up orphaned
 // serviceaccounts that could have been missed while the operator was down
-func (o *AWSOperator) Start(stop <-chan struct{}) error {
+func (o *AWSOperator) Start(ctx context.Context) error {
 	o.log.Info("garbage collection started")
 
 	// AWS secret roles
@@ -245,9 +244,7 @@ func (o *AWSOperator) Start(stop <-chan struct{}) error {
 // auth/kubernetes/role/<prefix>_aws_<namespace>_<name> and retrieve AWS credentials at
 // aws/roles/<prefix>_aws_<namespace>_<name> for the role_arn specified in the
 // vault.uw.systems/aws-role annotation
-func (o *AWSOperator) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
-
+func (o *AWSOperator) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// Reload vault configuration from the environment, this is primarily
 	// done to pick up CA cert rotations
 	if err := o.VaultConfig.ReadEnvironment(); err != nil {
@@ -315,20 +312,20 @@ func (o *AWSOperator) SetupWithManager(mgr ctrl.Manager) error {
 		For(&corev1.ServiceAccount{}).
 		WithEventFilter(predicate.Funcs{
 			CreateFunc: func(e event.CreateEvent) bool {
-				return o.admitEvent(e.Meta.GetNamespace(), e.Meta.GetAnnotations()[awsRoleAnnotation])
+				return o.admitEvent(e.Object.GetNamespace(), e.Object.GetAnnotations()[awsRoleAnnotation])
 			},
 			DeleteFunc: func(e event.DeleteEvent) bool {
-				return o.admitEvent(e.Meta.GetNamespace(), e.Meta.GetAnnotations()[awsRoleAnnotation])
+				return o.admitEvent(e.Object.GetNamespace(), e.Object.GetAnnotations()[awsRoleAnnotation])
 			},
 			GenericFunc: func(e event.GenericEvent) bool {
-				return o.admitEvent(e.Meta.GetNamespace(), e.Meta.GetAnnotations()[awsRoleAnnotation])
+				return o.admitEvent(e.Object.GetNamespace(), e.Object.GetAnnotations()[awsRoleAnnotation])
 			},
 			UpdateFunc: func(e event.UpdateEvent) bool {
 				// Update events are a special case, because we
 				// want to remove the roles in vault when the
 				// annotation is removed or changed to an
 				// invalid value.
-				return e.MetaOld.GetAnnotations()[awsRoleAnnotation] != e.MetaNew.GetAnnotations()[awsRoleAnnotation]
+				return e.ObjectOld.GetAnnotations()[awsRoleAnnotation] != e.ObjectNew.GetAnnotations()[awsRoleAnnotation]
 			},
 		}).
 		Complete(o)
