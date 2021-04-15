@@ -2,7 +2,7 @@ name: vault-sidecar-gcp-base
 prependContainers: true
 containers:
   - name: vault-credentials-agent
-    image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.7.0
+    image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:0.8.0
     lifecycle:
       postStart:
         exec:
