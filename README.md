@@ -5,33 +5,47 @@
 <!-- vim-markdown-toc GFM -->
 
 * [Operator](#operator)
-  * [Requirements](#requirements)
-  * [Usage](#usage)
-  * [Config file](#config-file)
-  * [Role names](#role-names)
+	* [Requirements](#requirements)
+	* [Usage](#usage)
+	* [Config file](#config-file)
+	* [Role names](#role-names)
 * [Sidecars](#sidecars)
-  * [Usage](#usage-1)
-  * [Renewal](#renewal)
+	* [Usage](#usage-1)
+	* [Renewal](#renewal)
 
 <!-- vim-markdown-toc -->
 
-This is a system for retrieving cloud IAM credentials from Vault for use in
-Kubernetes.
+Vault Kube Cloud Credentials (lovingly VKCC - shorthand) - is an application
+that runs in two modes - **operator** and **sidecar**.
 
-It's comprised of two parts:
+As an **operator** - it watches for Kubernetes annotations in ServiceAccounts
+and creates Vault objects - mapping that SA to the Cloud provider role value
+inside the annotation.
 
-- An operator which will create a login role and a secret in Vault based on
-  Kubernetes ServiceAccount annotations
-- A sidecar which retrieves the credentials from Vault and serves them over
-  HTTP, acting as a metadata endpoint for the given cloud provider
+It uses a config file to define which namespaces are allowed to map to which
+cloud provider roles.
+
+Cloud providers supported:
+  - AWS
+
+GCP - needs to be configured manually via a Terraform module:
+[terraform/terraform-vault-gcp-binding](terraform/terraform-vault-gcp-binding)
+
+As a **sidecar** - it runs next to you application container and exposes HTTP
+endpoint that contains cloud provider credentials. Libraries such as AWS SDK
+can consume such HTTP endpoint to always have up-to-date credentials.
+
+Cloud providers supported:
+  - AWS
+  - GCP
 
 ## Operator
 
 ### Requirements
 
 - A Vault server with:
-  - Kubernetes auth method, enabled and configured
-  - AWS secrets engine, enabled and configured
+  * Kubernetes auth method, enabled and configured
+  * AWS secrets engine, enabled and configured
 
 ### Usage
 
@@ -39,7 +53,7 @@ Refer to the [example](manifests/operator/) for a reference Kubernetes
 deployment.
 
 Annotate your ServiceAccounts and the operator will create the corresponding
-login role and aws secret role in Vault at
+login role and AWS secret role in Vault at
 `auth/kubernetes/roles/<prefix>_aws_<namespace>_<name>` and
 `aws/role/<prefix>_aws_<namespace>_<name>` respectively, where `<prefix>` is the
 string supplied with the `-prefix` flag (default: `vkcc`)
@@ -58,7 +72,7 @@ metadata:
 
 ### Config file
 
-You can control which ServiceAccounts can assume which roles based on their
+You control which ServiceAccounts can assume which roles based on their
 namespace by passing a yaml file to the operator with the flag `-config-file`.
 
 For example, the following configuration allows service accounts in `kube-system`
