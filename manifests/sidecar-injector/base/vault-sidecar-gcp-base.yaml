@@ -19,8 +19,6 @@ containers:
         value: "/etc/tls/ca.crt"
       - name: VAULT_ADDR
         value: "https://vault.sys-vault:8200"
-      - name: VKAC_ENVIRONMENT
-        value: "example"
       - name: POD_NAMESPACE
         valueFrom:
           fieldRef:
