@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -61,12 +62,15 @@ func TestAWSOperatorReconcile(t *testing.T) {
 	}
 
 	// CREATE: test that Reconcile creates the vault objects for a new SA
-	result, err := a.Reconcile(ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      "foo",
-			Namespace: "bar",
+	result, err := a.Reconcile(
+		context.Background(),
+		ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "foo",
+				Namespace: "bar",
+			},
 		},
-	})
+	)
 	assert.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, result)
 
@@ -101,12 +105,15 @@ func TestAWSOperatorReconcile(t *testing.T) {
 		},
 	})
 
-	updateResult, err := a.Reconcile(ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      "foo",
-			Namespace: "bar",
+	updateResult, err := a.Reconcile(
+		context.Background(),
+		ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "foo",
+				Namespace: "bar",
+			},
 		},
-	})
+	)
 	assert.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, updateResult)
 
@@ -123,12 +130,15 @@ func TestAWSOperatorReconcile(t *testing.T) {
 			Namespace: "bar",
 		},
 	})
-	removeResult, err := a.Reconcile(ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      "foo",
-			Namespace: "bar",
+	removeResult, err := a.Reconcile(
+		context.Background(),
+		ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "foo",
+				Namespace: "bar",
+			},
 		},
-	})
+	)
 	assert.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, removeResult)
 
@@ -207,12 +217,15 @@ func TestOperatorReconcileDelete(t *testing.T) {
 	}
 
 	// This should remove the objects from vault
-	result, err := a.Reconcile(ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      "foo",
-			Namespace: "bar",
+	result, err := a.Reconcile(
+		context.Background(),
+		ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "foo",
+				Namespace: "bar",
+			},
 		},
-	})
+	)
 	assert.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, result)
 
@@ -280,12 +293,14 @@ func TestOperatorReconcileBlocked(t *testing.T) {
 	}
 
 	// This shouldn't create the objects in vault
-	result, err := a.Reconcile(ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      "foo",
-			Namespace: "bar",
-		},
-	})
+	result, err := a.Reconcile(
+		context.Background(),
+		ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "foo",
+				Namespace: "bar",
+			},
+		})
 	assert.NoError(t, err)
 	assert.Equal(t, ctrl.Result{}, result)
 
@@ -331,10 +346,8 @@ func TestAWSOperatorStart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stopc := make(<-chan struct{})
-
 	// Test that Start returns cleanly when there are no items in vault
-	err = a.Start(stopc)
+	err = a.Start(context.Background())
 	assert.NoError(t, err)
 
 	// Create policies
@@ -405,7 +418,7 @@ func TestAWSOperatorStart(t *testing.T) {
 
 	// This should remove keys for vkcc_aws_bar_gc but leave
 	// vkcc_aws_bar_foo
-	err = a.Start(stopc)
+	err = a.Start(context.Background())
 	assert.NoError(t, err)
 
 	// Test that the gc'd policy is nil

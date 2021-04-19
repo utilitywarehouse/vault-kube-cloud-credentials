@@ -88,6 +88,10 @@ func (s *Sidecar) Run() error {
 		for {
 			duration, err := s.renew()
 			if err != nil {
+				if firstRun {
+					log.Error(err, "error renewing credentials")
+					os.Exit(1)
+				}
 				promErrors.Inc()
 				d := s.backoff.Duration()
 				log.Error(err, "error renewing credentials", "backoff", d)
