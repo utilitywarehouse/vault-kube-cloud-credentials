@@ -5,27 +5,16 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strings"
-	"time"
 
-	vault "github.com/hashicorp/vault/api"
 	"github.com/utilitywarehouse/vault-kube-cloud-credentials/operator"
 	"github.com/utilitywarehouse/vault-kube-cloud-credentials/sidecar"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 var (
-	operatorCommand             = flag.NewFlagSet("operator", flag.ExitOnError)
-	flagOperatorPrefix          = operatorCommand.String("prefix", "vkcc", "This prefix is prepended to all the roles and policies created in vault")
-	flagOperatorAWSBackend      = operatorCommand.String("aws-backend", "aws", "AWS secret backend path")
-	flagOperatorKubeAuthBackend = operatorCommand.String("kube-auth-backend", "kubernetes", "Kubernetes auth backend")
-	flagOperatorMetricsAddr     = operatorCommand.String("metrics-address", ":8080", "Metrics address")
-	flagOperatorConfigFile      = operatorCommand.String("config-file", "", "Path to a configuration file")
-	flagOperatorDefaultTTL      = operatorCommand.Duration("default-sts-ttl", 900*time.Second, "Default ttl for AWS credentials")
+	operatorCommand        = flag.NewFlagSet("operator", flag.ExitOnError)
+	flagOperatorConfigFile = operatorCommand.String("config-file", "", "Path to a configuration file")
 
 	sidecarCommand           = flag.NewFlagSet("sidecar", flag.ExitOnError)
 	flagSidecarKubeTokenPath = sidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
@@ -86,62 +75,14 @@ func main() {
 			os.Exit(1)
 		}
 
-		if strings.Contains(*flagOperatorPrefix, "_") {
-			fmt.Printf("prefix must not contain a '_': %s\n", *flagOperatorPrefix)
-			os.Exit(1)
-		}
-
-		scheme := runtime.NewScheme()
-
-		_ = clientgoscheme.AddToScheme(scheme)
-		_ = corev1.AddToScheme(scheme)
-
-		mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-			Scheme:             scheme,
-			MetricsBindAddress: *flagOperatorMetricsAddr,
-			LeaderElection:     false,
-		})
-		if err != nil {
-			log.Error(err, "error creating manager")
-			os.Exit(1)
-		}
-
-		vaultConfig := vault.DefaultConfig()
-		vaultClient, err := vault.NewClient(vaultConfig)
-		if err != nil {
-			log.Error(err, "error creating vault client")
-			os.Exit(1)
-		}
-		o, err := operator.NewAWSOperator(&operator.AWSOperatorConfig{
-			Config: &operator.Config{
-				KubeClient:            mgr.GetClient(),
-				KubernetesAuthBackend: *flagOperatorKubeAuthBackend,
-				Prefix:                *flagOperatorPrefix,
-				VaultClient:           vaultClient,
-				VaultConfig:           vaultConfig,
-			},
-			AWSPath:    *flagOperatorAWSBackend,
-			DefaultTTL: *flagOperatorDefaultTTL,
-		})
+		o, err := operator.New(*flagOperatorConfigFile)
 		if err != nil {
 			log.Error(err, "error creating operator")
 			os.Exit(1)
 		}
 
-		if *flagOperatorConfigFile != "" {
-			if err := o.LoadConfig(*flagOperatorConfigFile); err != nil {
-				log.Error(err, "error loading configuration file")
-				os.Exit(1)
-			}
-		}
-
-		if err = o.SetupWithManager(mgr); err != nil {
-			log.Error(err, "error creating controller")
-			os.Exit(1)
-		}
-
-		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-			log.Error(err, "error running manager")
+		if err := o.Start(); err != nil {
+			log.Error(err, "error running operator")
 			os.Exit(1)
 		}
 

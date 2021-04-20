@@ -2,19 +2,6 @@
 
 [![Build Status](https://drone.prod.merit.uw.systems/api/badges/utilitywarehouse/vault-kube-cloud-credentials/status.svg)](https://drone.prod.merit.uw.systems/utilitywarehouse/vault-kube-cloud-credentials)
 
-<!-- vim-markdown-toc GFM -->
-
-* [Operator](#operator)
-	* [Requirements](#requirements)
-	* [Usage](#usage)
-	* [Config file](#config-file)
-	* [Role names](#role-names)
-* [Sidecars](#sidecars)
-	* [Usage](#usage-1)
-	* [Renewal](#renewal)
-
-<!-- vim-markdown-toc -->
-
 Vault Kube Cloud Credentials (lovingly VKCC - shorthand) - is an application
 that runs in two modes - **operator** and **sidecar**.
 
@@ -56,10 +43,7 @@ Annotate your ServiceAccounts and the operator will create the corresponding
 login role and AWS secret role in Vault at
 `auth/kubernetes/roles/<prefix>_aws_<namespace>_<name>` and
 `aws/role/<prefix>_aws_<namespace>_<name>` respectively, where `<prefix>` is the
-string supplied with the `-prefix` flag (default: `vkcc`)
-
-`-prefix` - is used to distinguish between multiple Vault deployments that
-create roles in the same Provider account.
+value of `prefix` in the configuration file (default: `vkcc`).
 
 ```
 apiVersion: v1
@@ -72,8 +56,18 @@ metadata:
 
 ### Config file
 
-You control which ServiceAccounts can assume which roles based on their
-namespace by passing a yaml file to the operator with the flag `-config-file`.
+The operator can be configured by a yaml file passed to the operator with the flag
+`-config-file`.
+
+If no file is provided then the defaults are used. Any omitted values revert to
+their defaults.
+
+Refer to the `defaultFileConfig` in [operator/config.go](operator/config.go).
+
+#### Rules
+
+You can control which service accounts can assume which roles based on their
+namespace by setting rules under `aws.rules`.
 
 For example, the following configuration allows service accounts in `kube-system`
 and namespaces prefixed with `system-` to assume roles under the `sysadmin/*` path,

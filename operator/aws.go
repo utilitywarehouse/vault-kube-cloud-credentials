@@ -3,7 +3,6 @@ package operator
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/go-logr/logr"
-	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
@@ -34,13 +32,6 @@ path "{{ .AWSPath }}/sts/{{ .Name }}" {
   capabilities = ["create", "read", "update", "delete", "list"]
 }
 `
-
-// awsFileConfig configures the AWS operator
-type awsFileConfig struct {
-	AWS struct {
-		Rules AWSRules `yaml:"rules"`
-	} `yaml:"aws"`
-}
 
 // AWSRules are a collection of rules.
 type AWSRules []AWSRule
@@ -143,15 +134,15 @@ type AWSOperatorConfig struct {
 	*Config
 	AWSPath    string
 	DefaultTTL time.Duration
+	Rules      AWSRules
 }
 
 // AWSOperator is responsible for creating Kubernetes auth roles and AWS secret
 // roles based on ServiceAccount annotations
 type AWSOperator struct {
 	*AWSOperatorConfig
-	log   logr.Logger
-	rules AWSRules
-	tmpl  *template.Template
+	log  logr.Logger
+	tmpl *template.Template
 }
 
 // NewAWSOperator returns a configured AWSOperator
@@ -168,24 +159,6 @@ func NewAWSOperator(config *AWSOperatorConfig) (*AWSOperator, error) {
 	}
 
 	return ar, nil
-}
-
-// LoadConfig loads configuration from a file
-func (o *AWSOperator) LoadConfig(file string) error {
-	afc := &awsFileConfig{}
-
-	data, err := ioutil.ReadFile(file)
-	if err != nil {
-		return err
-	}
-
-	if err := yaml.Unmarshal(data, afc); err != nil {
-		return err
-	}
-
-	o.rules = afc.AWS.Rules
-
-	return nil
 }
 
 // Start is ran when the manager starts up. We're using it to clear up orphaned
@@ -290,7 +263,7 @@ func (o *AWSOperator) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Res
 // namespace by the rules laid out in the config file
 func (o *AWSOperator) admitEvent(namespace, roleArn string) bool {
 	if roleArn != "" {
-		allowed, err := o.rules.allow(namespace, roleArn)
+		allowed, err := o.Rules.allow(namespace, roleArn)
 		if err != nil {
 			o.log.Error(err, "error matching role arn against rules for namespace", "role_arn", roleArn, "namespace", namespace)
 		} else if allowed {

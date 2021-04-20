@@ -1,0 +1,13 @@
+prefix: "dev"
+aws:
+  rules:
+    - namespacePatterns:
+        - kube-system
+        - system-*
+      roleNamePatterns:
+        - sysadmin-*
+        - sysadmin/*
+        - org/s3-admin
+      accountIDs:
+        - 000000000000
+        - 111111111111
