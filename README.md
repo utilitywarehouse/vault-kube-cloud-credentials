@@ -2,20 +2,6 @@
 
 [![Build Status](https://drone.prod.merit.uw.systems/api/badges/utilitywarehouse/vault-kube-cloud-credentials/status.svg)](https://drone.prod.merit.uw.systems/utilitywarehouse/vault-kube-cloud-credentials)
 
-<!-- vim-markdown-toc GFM -->
-
-* [Operator](#operator)
-  * [Requirements](#requirements)
-  * [Usage](#usage)
-  * [Config file](#config-file)
-    * [Rules](#rules)
-  * [Role names](#role-names)
-* [Sidecars](#sidecars)
-  * [Usage](#usage-1)
-  * [Renewal](#renewal)
-
-<!-- vim-markdown-toc -->
-
 Vault Kube Cloud Credentials (lovingly VKCC - shorthand) - is an application
 that runs in two modes - **operator** and **sidecar**.
 
