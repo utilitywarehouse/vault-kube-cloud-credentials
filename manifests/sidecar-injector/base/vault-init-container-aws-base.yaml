@@ -2,7 +2,7 @@ name: vault-init-container-aws-base
 prependInitContainers: true
 initContainers:
   - name: vault-credentials
-    image: vault:1.6.0
+    image: vault:1.8.4
     command:
       - sh
       - -c

@@ -7,7 +7,7 @@ RUN apk --no-cache add git \
   && go test ./... \
   && go build -o /vault-kube-cloud-credentials .
 
-FROM alpine:3.13
+FROM alpine:3.14
 COPY --from=build /vault-kube-cloud-credentials /vault-kube-cloud-credentials
 
 ENTRYPOINT [ "/vault-kube-cloud-credentials" ]
