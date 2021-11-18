@@ -10,4 +10,6 @@ RUN apk --no-cache add git \
 FROM alpine:3.14
 COPY --from=build /vault-kube-cloud-credentials /vault-kube-cloud-credentials
 
+USER guest
+
 ENTRYPOINT [ "/vault-kube-cloud-credentials" ]
