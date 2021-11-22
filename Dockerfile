@@ -12,7 +12,7 @@ RUN apk --no-cache add git \
 FROM alpine:3.14
 COPY --from=build /vault-kube-cloud-credentials /vault-kube-cloud-credentials
 
-# ref: https://github.com/kubernetes/git-sync/blob/release-3.x/Dockerfile.in#L68
+# ref: https://github.com/kubernetes/git-sync/blob/master/Dockerfile.in#L68
 #
 # By default we will run as this user...
 RUN echo "default:x:65533:65533::/tmp:/sbin/nologin" >> /etc/passwd
