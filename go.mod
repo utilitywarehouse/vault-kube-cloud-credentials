@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/aws/aws-sdk-go v1.40.44
-	github.com/go-logr/logr v0.4.0
+	github.com/go-logr/logr v1.2.0
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/go-rootcerts v1.0.2
 	github.com/hashicorp/vault v1.8.2
@@ -15,8 +15,8 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/utilitywarehouse/go-operational v0.0.0-20190722153447-b0f3f6284543
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.22.1
-	k8s.io/apimachinery v0.22.1
+	k8s.io/api v0.23.5
+	k8s.io/apimachinery v0.23.5
 	k8s.io/client-go v0.22.1
 	sigs.k8s.io/controller-runtime v0.10.0
 )
