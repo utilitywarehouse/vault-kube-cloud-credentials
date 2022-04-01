@@ -16,7 +16,7 @@ require (
 	github.com/utilitywarehouse/go-operational v0.0.0-20190722153447-b0f3f6284543
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.24.0-alpha.4
-	k8s.io/apimachinery v0.24.0-alpha.4
+	k8s.io/apimachinery v0.24.0-beta.0
 	k8s.io/client-go v0.24.0-alpha.4
 	sigs.k8s.io/controller-runtime v0.11.2
 )
@@ -198,7 +198,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.23.5 // indirect
 	k8s.io/component-base v0.23.5 // indirect
 	k8s.io/klog/v2 v2.60.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20220326042323-e69a86c08c48 // indirect
+	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
 	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
