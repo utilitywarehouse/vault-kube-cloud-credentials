@@ -2,7 +2,7 @@ name: vault-sidecar-aws-base
 prependContainers: true
 containers:
   - name: vault-credentials-agent
-    image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:latest
+    image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:v0.8.5
     lifecycle:
       postStart:
         exec:
