@@ -2,6 +2,7 @@ package sidecar
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -62,6 +63,9 @@ func (apc *AWSProviderConfig) renew(client *vault.Client) (time.Duration, error)
 	secret, err := client.Logical().ReadWithData(apc.Path+"/sts/"+apc.Role, secretData)
 	if err != nil {
 		return -1, err
+	}
+	if secret == nil {
+		return -1, errors.New("secret returned by vault client is nil")
 	}
 
 	// Convert the secret's lease duration into a time.Duration
