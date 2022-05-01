@@ -7,10 +7,10 @@ require (
 	github.com/go-logr/logr v1.2.3
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/go-rootcerts v1.0.2
-	github.com/hashicorp/vault v1.10.1
+	github.com/hashicorp/vault v1.10.2
 	github.com/hashicorp/vault-plugin-auth-kubernetes v0.12.0
 	github.com/hashicorp/vault/api v1.5.0
-	github.com/hashicorp/vault/sdk v0.4.2-0.20220324144656-cdb85cfca8f5
+	github.com/hashicorp/vault/sdk v0.4.2-0.20220422204215-a7cef09c9429
 	github.com/prometheus/client_golang v1.12.1
 	github.com/stretchr/testify v1.7.0
 	github.com/utilitywarehouse/go-operational v0.0.0-20190722153447-b0f3f6284543
