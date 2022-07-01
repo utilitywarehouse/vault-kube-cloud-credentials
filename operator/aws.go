@@ -23,7 +23,7 @@ import (
 
 const (
 	awsRoleAnnotation       = "vault.uw.systems/aws-role"
-	defaultStsTTLAnnotation = "vault.uw.systems/default-sts-ttl"
+	defaultSTSTTLAnnotation = "vault.uw.systems/default-sts-ttl"
 )
 
 var awsPolicyTemplate = `
@@ -254,7 +254,7 @@ func (o *AWSOperator) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Res
 
 	// check if default-sts-ttl is set if not use config default
 	defaultTTL := o.DefaultTTL
-	if v, ok := serviceAccount.Annotations[defaultStsTTLAnnotation]; ok {
+	if v, ok := serviceAccount.Annotations[defaultSTSTTLAnnotation]; ok {
 		defaultTTL, err = time.ParseDuration(v)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("error parsing default_sts_ttl %w", err)

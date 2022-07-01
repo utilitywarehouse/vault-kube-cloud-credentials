@@ -106,7 +106,7 @@ func TestAWSOperatorReconcile(t *testing.T) {
 				Namespace: "bar",
 				Annotations: map[string]string{
 					awsRoleAnnotation:       "arn:aws:iam::111111111111:role/another/foobar-role",
-					defaultStsTTLAnnotation: "2h",
+					defaultSTSTTLAnnotation: "2h",
 				},
 			},
 		}).
