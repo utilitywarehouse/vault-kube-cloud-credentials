@@ -30,15 +30,18 @@ func TestAWSOperatorReconcile(t *testing.T) {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
 
-	fakeKubeClient := fake.NewFakeClientWithScheme(scheme, &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "foo",
-			Namespace: "bar",
-			Annotations: map[string]string{
-				awsRoleAnnotation: "arn:aws:iam::111111111111:role/foobar-role",
+	fakeKubeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(&corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "bar",
+				Annotations: map[string]string{
+					awsRoleAnnotation: "arn:aws:iam::111111111111:role/foobar-role",
+				},
 			},
-		},
-	})
+		}).
+		Build()
 
 	fakeVaultCluster := newFakeVaultCluster(t)
 
@@ -95,16 +98,19 @@ func TestAWSOperatorReconcile(t *testing.T) {
 
 	// UPDATE: test that Reconcile updates the role when the annotation
 	// changes
-	a.KubeClient = fake.NewFakeClientWithScheme(scheme, &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "foo",
-			Namespace: "bar",
-			Annotations: map[string]string{
-				awsRoleAnnotation:       "arn:aws:iam::111111111111:role/another/foobar-role",
-				defaultStsTTLAnnotation: "2h",
+	a.KubeClient = fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(&corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "bar",
+				Annotations: map[string]string{
+					awsRoleAnnotation:       "arn:aws:iam::111111111111:role/another/foobar-role",
+					defaultStsTTLAnnotation: "2h",
+				},
 			},
-		},
-	})
+		}).
+		Build()
 
 	updateResult, err := a.Reconcile(
 		context.Background(),
@@ -126,12 +132,16 @@ func TestAWSOperatorReconcile(t *testing.T) {
 
 	// REMOVE: finally, test that removing the annotation deletes the objects in
 	// vault
-	a.KubeClient = fake.NewFakeClientWithScheme(scheme, &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "foo",
-			Namespace: "bar",
-		},
-	})
+	a.KubeClient = fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(&corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "bar",
+			},
+		}).
+		Build()
+
 	removeResult, err := a.Reconcile(
 		context.Background(),
 		ctrl.Request{
@@ -156,6 +166,7 @@ func TestAWSOperatorReconcile(t *testing.T) {
 
 	// Test that the returned aws role is nil
 	removedAWSRole, err := core.Client.Logical().Read("aws/roles/vkcc_aws_bar_foo")
+	assert.NoError(t, err)
 	assert.Empty(t, removedAWSRole)
 }
 
@@ -166,7 +177,7 @@ func TestOperatorReconcileDelete(t *testing.T) {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
 
-	fakeKubeClient := fake.NewFakeClientWithScheme(scheme)
+	fakeKubeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	fakeVaultCluster := newFakeVaultCluster(t)
 
@@ -243,6 +254,7 @@ func TestOperatorReconcileDelete(t *testing.T) {
 
 	// Test that the returned aws role is nil
 	removedAWSRole, err := core.Client.Logical().Read("aws/roles/vkcc_bar_foo")
+	assert.NoError(t, err)
 	assert.Empty(t, removedAWSRole)
 }
 
@@ -253,15 +265,18 @@ func TestOperatorReconcileBlocked(t *testing.T) {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
 
-	fakeKubeClient := fake.NewFakeClientWithScheme(scheme, &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "foo",
-			Namespace: "bar",
-			Annotations: map[string]string{
-				awsRoleAnnotation: "arn:aws:iam::111111111111:role/foobar-role",
+	fakeKubeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(&corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "bar",
+				Annotations: map[string]string{
+					awsRoleAnnotation: "arn:aws:iam::111111111111:role/foobar-role",
+				},
 			},
-		},
-	})
+		}).
+		Build()
 
 	fakeVaultCluster := newFakeVaultCluster(t)
 
@@ -317,6 +332,7 @@ func TestOperatorReconcileBlocked(t *testing.T) {
 
 	// Test that the returned aws role is nil
 	noAWSRole, err := core.Client.Logical().Read("aws/roles/vkcc_bar_foo")
+	assert.NoError(t, err)
 	assert.Empty(t, noAWSRole)
 }
 
@@ -327,7 +343,7 @@ func TestAWSOperatorStart(t *testing.T) {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
 
-	fakeKubeClient := fake.NewFakeClientWithScheme(scheme)
+	fakeKubeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	fakeVaultCluster := newFakeVaultCluster(t)
 
@@ -407,15 +423,18 @@ func TestAWSOperatorStart(t *testing.T) {
 
 	// Add a service account for only one of the keys that have been written
 	// to vault
-	a.KubeClient = fake.NewFakeClientWithScheme(scheme, &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "foo",
-			Namespace: "bar",
-			Annotations: map[string]string{
-				awsRoleAnnotation: "arn:aws:iam::111111111111:role/foobar-role",
+	a.KubeClient = fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(&corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "bar",
+				Annotations: map[string]string{
+					awsRoleAnnotation: "arn:aws:iam::111111111111:role/foobar-role",
+				},
 			},
-		},
-	})
+		}).
+		Build()
 
 	// This should remove keys for vkcc_aws_bar_gc but leave
 	// vkcc_aws_bar_foo
