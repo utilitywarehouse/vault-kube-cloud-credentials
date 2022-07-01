@@ -66,6 +66,7 @@ func New(configFile string) (*Operator, error) {
 	ao, err := NewAWSOperator(&AWSOperatorConfig{
 		Config:     config,
 		DefaultTTL: fc.AWS.DefaultTTL,
+		MinTTL:     fc.AWS.MinTTL,
 		AWSPath:    fc.AWS.Path,
 		Rules:      fc.AWS.Rules,
 	})

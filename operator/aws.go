@@ -3,6 +3,7 @@ package operator
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -21,7 +22,8 @@ import (
 )
 
 const (
-	awsRoleAnnotation = "vault.uw.systems/aws-role"
+	awsRoleAnnotation       = "vault.uw.systems/aws-role"
+	defaultSTSTTLAnnotation = "vault.uw.systems/default-sts-ttl"
 )
 
 var awsPolicyTemplate = `
@@ -134,6 +136,7 @@ type AWSOperatorConfig struct {
 	*Config
 	AWSPath    string
 	DefaultTTL time.Duration
+	MinTTL     time.Duration
 	Rules      AWSRules
 }
 
@@ -249,8 +252,22 @@ func (o *AWSOperator) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Res
 		return ctrl.Result{}, o.removeFromVault(req.Namespace, req.Name)
 	}
 
+	// check if default-sts-ttl is set if not use config default
+	defaultTTL := o.DefaultTTL
+	if v, ok := serviceAccount.Annotations[defaultSTSTTLAnnotation]; ok {
+		defaultTTL, err = time.ParseDuration(v)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("error parsing default_sts_ttl %w", err)
+		}
+
+		// check new default ttl value is higher then min ttl set in config
+		if defaultTTL < o.MinTTL {
+			return ctrl.Result{}, fmt.Errorf("minimum default-sts-ttl value allowed is %s, its set to %s", o.MinTTL, defaultTTL)
+		}
+	}
+
 	err = o.writeToVault(req.Namespace, req.Name, map[string]interface{}{
-		"default_sts_ttl": int(o.DefaultTTL.Seconds()),
+		"default_sts_ttl": int(defaultTTL.Seconds()),
 		"role_arns":       []string{roleArn},
 		"credential_type": "assumed_role",
 	})
