@@ -100,7 +100,8 @@ func TestAWSOperatorReconcile(t *testing.T) {
 			Name:      "foo",
 			Namespace: "bar",
 			Annotations: map[string]string{
-				awsRoleAnnotation: "arn:aws:iam::111111111111:role/another/foobar-role",
+				awsRoleAnnotation:       "arn:aws:iam::111111111111:role/another/foobar-role",
+				defaultStsTTLAnnotation: "2h",
 			},
 		},
 	})
@@ -121,6 +122,7 @@ func TestAWSOperatorReconcile(t *testing.T) {
 	updatedAWSRole, err := core.Client.Logical().Read("aws/roles/vkcc_aws_bar_foo")
 	assert.NoError(t, err)
 	assert.Equal(t, []interface{}{"arn:aws:iam::111111111111:role/another/foobar-role"}, updatedAWSRole.Data["role_arns"].([]interface{}))
+	assert.Equal(t, json.Number("7200"), updatedAWSRole.Data["default_sts_ttl"].(json.Number))
 
 	// REMOVE: finally, test that removing the annotation deletes the objects in
 	// vault

@@ -16,6 +16,7 @@ var (
 		Prefix:                "vkcc",
 		AWS: awsFileConfig{
 			DefaultTTL: 15 * time.Minute,
+			MinTTL:     15 * time.Minute,
 			Path:       "aws",
 		},
 	}
@@ -34,8 +35,10 @@ type fileConfig struct {
 }
 
 type awsFileConfig struct {
-	// DefaultTTL is the ttl of credentials that are issued for a role
+	// DefaultTTL is the default ttl of credentials that are issued for a role if not set
 	DefaultTTL time.Duration `yaml:"defaultTTL"`
+	// MinTTL is the minimum default-sts-ttl value allowed to set
+	MinTTL time.Duration `yaml:"minTTL"`
 	// Path is the mount path of the AWS secret backend
 	Path string `yaml:"path"`
 	// Rules that govern which service accounts can assume which roles
