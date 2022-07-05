@@ -24,7 +24,7 @@ import (
 const (
 	awsRoleAnnotation       = "vault.uw.systems/aws-role"
 	defaultSTSTTLAnnotation = "vault.uw.systems/default-sts-ttl"
-	maxSTSTTLDuration       = 12 * 60 * 60 * time.Second
+	maxSTSTTLDuration       = 12 * time.Hour
 )
 
 var awsPolicyTemplate = `
