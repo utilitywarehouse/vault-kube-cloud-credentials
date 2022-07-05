@@ -24,6 +24,7 @@ import (
 const (
 	awsRoleAnnotation       = "vault.uw.systems/aws-role"
 	defaultSTSTTLAnnotation = "vault.uw.systems/default-sts-ttl"
+	maxSTSTTLDuration       = 12 * time.Hour
 )
 
 var awsPolicyTemplate = `
@@ -259,17 +260,25 @@ func (o *AWSOperator) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Res
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("error parsing default_sts_ttl %w", err)
 		}
+	}
 
-		// check new default ttl value is higher then min ttl set in config
-		if defaultTTL < o.MinTTL {
-			return ctrl.Result{}, fmt.Errorf("minimum default-sts-ttl value allowed is %s, its set to %s", o.MinTTL, defaultTTL)
-		}
+	// check new default ttl value is within allowed range
+	if defaultTTL < o.MinTTL {
+		return ctrl.Result{}, fmt.Errorf("minimum default-sts-ttl value allowed is %s, its set to %s", o.MinTTL, defaultTTL)
+	}
+	if defaultTTL > maxSTSTTLDuration {
+		return ctrl.Result{}, fmt.Errorf("maximum default-sts-ttl value allowed is %s, its set to %s", maxSTSTTLDuration, defaultTTL)
 	}
 
 	err = o.writeToVault(req.Namespace, req.Name, map[string]interface{}{
 		"default_sts_ttl": int(defaultTTL.Seconds()),
 		"role_arns":       []string{roleArn},
 		"credential_type": "assumed_role",
+
+		// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
+		// Valid Range: Minimum value of 900. Maximum value of 43200.
+		// if this value it not set then default max will be either maxLease of vault or 1h
+		"max_sts_ttl": int(maxSTSTTLDuration.Seconds()),
 	})
 
 	return ctrl.Result{}, err

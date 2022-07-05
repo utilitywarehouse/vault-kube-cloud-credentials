@@ -95,6 +95,7 @@ func TestAWSOperatorReconcile(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []interface{}{"arn:aws:iam::111111111111:role/foobar-role"}, awsRole.Data["role_arns"].([]interface{}))
 	assert.Equal(t, json.Number("3600"), awsRole.Data["default_sts_ttl"].(json.Number))
+	assert.Equal(t, json.Number("43200"), awsRole.Data["max_sts_ttl"].(json.Number))
 
 	// UPDATE: test that Reconcile updates the role when the annotation
 	// changes
