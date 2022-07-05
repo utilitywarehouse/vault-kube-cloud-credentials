@@ -49,9 +49,15 @@ kind: ServiceAccount
 metadata:
   name: foobar
   annotations:
-    uw.systems/aws-role: "arn:aws:iam::000000000000:role/some-role-name"
+    vault.uw.systems/aws-role: "arn:aws:iam::000000000000:role/some-role-name"
+    vault.uw.systems/default-sts-ttl: "6h"
 ```
 
+optional `default-sts-ttl` annotation, can be used to set custom ttl on aws token and lease time.
+Valid Range for this value is [Minimum value of 900s, Maximum value of 43200s](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html).
+this value should be lower then `maxLeaseTTL` of vault otherwise it will be capped at maxLeaseTTL.
+
+_if custom TTL is set then make sure `max_session_duration` is updated in assume Role policy for the role if required, as it defaults to `1h`._
 ### Config file
 
 The operator can be configured by a yaml file passed to the operator with the flag
