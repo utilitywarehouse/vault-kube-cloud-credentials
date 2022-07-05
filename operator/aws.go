@@ -270,6 +270,11 @@ func (o *AWSOperator) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Res
 		"default_sts_ttl": int(defaultTTL.Seconds()),
 		"role_arns":       []string{roleArn},
 		"credential_type": "assumed_role",
+
+		// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
+		// Valid Range: Minimum value of 900. Maximum value of 43200.
+		// if this value it not set then default max will be either maxLease of vault or 1h
+		"max_sts_ttl": 43200,
 	})
 
 	return ctrl.Result{}, err
