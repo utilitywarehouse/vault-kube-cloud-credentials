@@ -55,7 +55,7 @@ metadata:
 
 optional `default-sts-ttl` annotation, can be used to set custom ttl on aws token and lease time.
 Valid Range for this value is [Minimum value of 900s, Maximum value of 43200s](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html).
-this value should be lower then `maxLeaseTTL` of vault otherwise it will be capped at maxLeaseTTL.
+this value should be lower then `maxLeaseTTL` of vault or `max_lease_ttl` on AWS backend config otherwise it will be capped at maxTTL.
 
 _if custom TTL is set then make sure `max_session_duration` is updated in assume Role policy for the role if required, as it defaults to `1h`._
 ### Config file
