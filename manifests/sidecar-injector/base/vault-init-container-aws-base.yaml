@@ -31,6 +31,15 @@ initContainers:
         aws_access_key_id={{ .Data.access_key }}
         aws_secret_access_key={{ .Data.secret_key }}
         aws_session_token={{ .Data.security_token }}
+
+        ; debug info
+        ; request_id={{ .RequestID }}
+        ; lease_id={{ .LeaseID }}
+        ; renewable={{ .Renewable }}
+        ; lease_duration={{ .LeaseDuration }}
+        ; arn={{ .Data.arn }}
+        ; warnings={{ .Warnings }}
+
         {{ end -}}
         EOT
         }
