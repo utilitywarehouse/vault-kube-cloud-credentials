@@ -324,7 +324,7 @@ func (o *AWSOperator) SetupWithManager(mgr ctrl.Manager) error {
 				// want to remove the roles in vault when the
 				// annotation is removed or changed to an
 				// invalid value.
-				return e.ObjectOld.GetAnnotations()[awsRoleAnnotation] != e.ObjectNew.GetAnnotations()[awsRoleAnnotation] &&
+				return e.ObjectOld.GetAnnotations()[awsRoleAnnotation] != e.ObjectNew.GetAnnotations()[awsRoleAnnotation] ||
 					e.ObjectOld.GetAnnotations()[defaultSTSTTLAnnotation] != e.ObjectNew.GetAnnotations()[defaultSTSTTLAnnotation]
 			},
 		}).
