@@ -6,7 +6,7 @@ go 1.18
 replace github.com/hashicorp/vault-plugin-auth-kubernetes v0.13.0 => github.com/hashicorp/vault-plugin-auth-kubernetes v0.12.0
 
 require (
-	github.com/aws/aws-sdk-go v1.44.71
+	github.com/aws/aws-sdk-go v1.44.89
 	github.com/go-logr/logr v1.2.3
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/go-rootcerts v1.0.2
