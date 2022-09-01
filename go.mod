@@ -10,7 +10,7 @@ require (
 	github.com/go-logr/logr v1.2.3
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/go-rootcerts v1.0.2
-	github.com/hashicorp/vault v1.11.2
+	github.com/hashicorp/vault v1.11.3
 	github.com/hashicorp/vault-plugin-auth-kubernetes v0.13.0
 	github.com/hashicorp/vault/api v1.7.2
 	github.com/hashicorp/vault/sdk v0.5.3
@@ -41,10 +41,10 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
-	github.com/BurntSushi/toml v0.3.1 // indirect
+	github.com/BurntSushi/toml v1.2.0 // indirect
 	github.com/DataDog/datadog-go v3.2.0+incompatible // indirect
 	github.com/Jeffail/gabs v1.1.1 // indirect
-	github.com/Masterminds/goutils v1.1.0 // indirect
+	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
@@ -94,7 +94,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.0.0-20220520183353-fd19c99a87aa // indirect
 	github.com/googleapis/gax-go/v2 v2.4.0 // indirect
 	github.com/gophercloud/gophercloud v0.1.0 // indirect
-	github.com/hashicorp/consul/sdk v0.8.0 // indirect
+	github.com/hashicorp/consul/sdk v0.11.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-discover v0.0.0-20210818145131-c573d69da192 // indirect
