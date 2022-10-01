@@ -19,8 +19,8 @@ require (
 	github.com/stretchr/testify v1.8.0
 	github.com/utilitywarehouse/go-operational v0.0.0-20220413104526-79ce40a50281
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.25.0
-	k8s.io/apimachinery v0.25.0
+	k8s.io/api v0.25.2
+	k8s.io/apimachinery v0.25.2
 	k8s.io/client-go v0.25.0
 	sigs.k8s.io/controller-runtime v0.12.3
 )
