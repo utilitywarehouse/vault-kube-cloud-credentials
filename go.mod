@@ -7,7 +7,7 @@ go 1.19
 replace github.com/hashicorp/vault v1.11.3 => github.com/hashicorp/vault v1.11.2
 
 require (
-	github.com/aws/aws-sdk-go v1.44.90
+	github.com/aws/aws-sdk-go v1.44.109
 	github.com/go-logr/logr v1.2.3
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/go-rootcerts v1.0.2
