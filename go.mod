@@ -13,7 +13,7 @@ require (
 	github.com/hashicorp/go-rootcerts v1.0.2
 	github.com/hashicorp/vault v1.11.3
 	github.com/hashicorp/vault-plugin-auth-kubernetes v0.14.0
-	github.com/hashicorp/vault/api v1.7.2
+	github.com/hashicorp/vault/api v1.8.0
 	github.com/hashicorp/vault/sdk v0.6.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/stretchr/testify v1.8.0
