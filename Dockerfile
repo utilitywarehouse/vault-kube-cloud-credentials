@@ -9,7 +9,7 @@ RUN apk --no-cache add git \
       && go test ./... \
       && go build -o /vault-kube-cloud-credentials .
 
-FROM alpine:3.16
+FROM alpine:3.17
 COPY --from=build /vault-kube-cloud-credentials /vault-kube-cloud-credentials
 
 # ref: https://github.com/kubernetes/git-sync/blob/master/Dockerfile.in#L68
