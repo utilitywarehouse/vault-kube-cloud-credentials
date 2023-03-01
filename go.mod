@@ -3,7 +3,7 @@ module github.com/utilitywarehouse/vault-kube-cloud-credentials
 go 1.19
 
 require (
-	github.com/aws/aws-sdk-go v1.44.191
+	github.com/aws/aws-sdk-go v1.44.211
 	github.com/go-logr/logr v1.2.3
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/go-rootcerts v1.0.2
