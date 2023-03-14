@@ -1,4 +1,4 @@
-FROM golang:1.19-alpine AS build
+FROM golang:1.20-alpine AS build
 
 WORKDIR /go/src/github.com/utilitywarehouse/vault-kube-cloud-credentials
 COPY . /go/src/github.com/utilitywarehouse/vault-kube-cloud-credentials
