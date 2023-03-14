@@ -31,6 +31,13 @@ containers:
       - name: metrics
         containerPort: 8099
         protocol: TCP
+    resources:
+      requests:
+        cpu: 0m
+        memory: 25Mi
+      limits:
+        cpu: 1000m
+        memory: 100Mi
     volumeMounts:
       - name: vault-tls
         mountPath: /etc/tls
@@ -66,6 +73,13 @@ containers:
       - name: metrics
         containerPort: 8199
         protocol: TCP
+    resources:
+      requests:
+        cpu: 0m
+        memory: 25Mi
+      limits:
+        cpu: 1000m
+        memory: 100Mi
     volumeMounts:
       - name: vault-tls
         mountPath: /etc/tls
