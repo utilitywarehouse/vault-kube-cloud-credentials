@@ -33,11 +33,11 @@ containers:
         protocol: TCP
     resources:
       requests:
-        cpu: 10m
+        cpu: 0m
         memory: 25Mi
       limits:
-        cpu: 100m
-        memory: 50Mi
+        cpu: 1000m
+        memory: 100Mi
     volumeMounts:
       - name: vault-tls
         mountPath: /etc/tls
