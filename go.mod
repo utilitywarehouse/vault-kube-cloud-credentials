@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/aws/aws-sdk-go v1.44.220
-	github.com/go-logr/logr v1.2.3
+	github.com/go-logr/logr v1.2.4
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/go-rootcerts v1.0.2
 	github.com/hashicorp/vault/api v1.9.0
