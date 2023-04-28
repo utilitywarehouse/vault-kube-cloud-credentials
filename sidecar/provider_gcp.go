@@ -82,7 +82,7 @@ type GCPProviderConfig struct {
 // the configuration
 func (gpc *GCPProviderConfig) renew(client *vault.Client) (time.Duration, error) {
 	// Get a credentials secret from vault for the role
-	secret, err := client.Logical().Read(gpc.Path + "/token/" + gpc.RoleSet)
+	secret, err := client.Logical().Read(gpc.Path + "/roleset/" + gpc.RoleSet + "/token")
 	if err != nil {
 		return -1, err
 	}
