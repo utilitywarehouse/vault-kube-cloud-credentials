@@ -1,14 +1,14 @@
 module github.com/utilitywarehouse/vault-kube-cloud-credentials
 
 go 1.21
-toolchain go1.22.2
+toolchain go1.22.3
 
 require (
 	github.com/aws/aws-sdk-go v1.51.32
 	github.com/go-logr/logr v1.4.1
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-rootcerts v1.0.2
-	github.com/hashicorp/vault/api v1.13.0
+	github.com/hashicorp/vault/api v1.14.0
 	github.com/prometheus/client_golang v1.19.0
 	github.com/stretchr/testify v1.9.0
 	github.com/utilitywarehouse/go-operational v0.0.0-20220413104526-79ce40a50281
@@ -42,9 +42,8 @@ require (
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-hclog v1.4.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.4 // indirect
+	github.com/hashicorp/go-retryablehttp v0.7.6 // indirect
 	github.com/hashicorp/go-secure-stdlib/parseutil v0.1.7 // indirect
 	github.com/hashicorp/go-secure-stdlib/strutil v0.1.2 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
@@ -67,13 +66,13 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63 // indirect
-	golang.org/x/net v0.23.0 // indirect
+	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/term v0.18.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/term v0.20.0 // indirect
+	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
