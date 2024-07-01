@@ -4,7 +4,7 @@ go 1.21
 toolchain go1.22.4
 
 require (
-	github.com/aws/aws-sdk-go v1.53.14
+	github.com/aws/aws-sdk-go v1.54.11
 	github.com/go-logr/logr v1.4.2
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-rootcerts v1.0.2
