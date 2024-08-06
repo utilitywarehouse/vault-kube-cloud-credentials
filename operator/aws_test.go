@@ -20,7 +20,7 @@ func TestAWSOperatorReconcile(t *testing.T) {
 	//_ = clientgoscheme.AddToScheme(scheme)
 	//_ = corev1.AddToScheme(scheme)
 
-	//fakeKubeClient := fake.NewClientBuilder().
+	// fakeKubeClient := fake.NewClientBuilder().
 	//	WithScheme(scheme).
 	//	WithObjects(&corev1.ServiceAccount{
 	//		ObjectMeta: metav1.ObjectMeta{
@@ -33,11 +33,11 @@ func TestAWSOperatorReconcile(t *testing.T) {
 	//	}).
 	//	Build()
 
-	//fakeVaultCluster := newFakeVaultCluster(t)
+	// fakeVaultCluster := newFakeVaultCluster(t)
 
-	//core := fakeVaultCluster.Cores[0]
+	// core := fakeVaultCluster.Cores[0]
 
-	//ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	// ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	//a, err := NewAWSOperator(&AWSOperatorConfig{
 	//	Config: &Config{
@@ -169,13 +169,13 @@ func TestOperatorReconcileDelete(t *testing.T) {
 	//_ = clientgoscheme.AddToScheme(scheme)
 	//_ = corev1.AddToScheme(scheme)
 
-	//fakeKubeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	// fakeKubeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	//fakeVaultCluster := newFakeVaultCluster(t)
+	// fakeVaultCluster := newFakeVaultCluster(t)
 
-	//core := fakeVaultCluster.Cores[0]
+	// core := fakeVaultCluster.Cores[0]
 
-	//ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	// ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	//a, err := NewAWSOperator(&AWSOperatorConfig{
 	//	Config: &Config{
@@ -258,7 +258,7 @@ func TestOperatorReconcileBlocked(t *testing.T) {
 	//_ = clientgoscheme.AddToScheme(scheme)
 	//_ = corev1.AddToScheme(scheme)
 
-	//fakeKubeClient := fake.NewClientBuilder().
+	// fakeKubeClient := fake.NewClientBuilder().
 	//	WithScheme(scheme).
 	//	WithObjects(&corev1.ServiceAccount{
 	//		ObjectMeta: metav1.ObjectMeta{
@@ -271,11 +271,11 @@ func TestOperatorReconcileBlocked(t *testing.T) {
 	//	}).
 	//	Build()
 
-	//fakeVaultCluster := newFakeVaultCluster(t)
+	// fakeVaultCluster := newFakeVaultCluster(t)
 
-	//core := fakeVaultCluster.Cores[0]
+	// core := fakeVaultCluster.Cores[0]
 
-	//ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	// ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	//a, err := NewAWSOperator(&AWSOperatorConfig{
 	//	Config: &Config{
@@ -337,11 +337,11 @@ func TestAWSOperatorStart(t *testing.T) {
 	//_ = clientgoscheme.AddToScheme(scheme)
 	//_ = corev1.AddToScheme(scheme)
 
-	//fakeKubeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	// fakeKubeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	//fakeVaultCluster := newFakeVaultCluster(t)
+	// fakeVaultCluster := newFakeVaultCluster(t)
 
-	//core := fakeVaultCluster.Cores[0]
+	// core := fakeVaultCluster.Cores[0]
 
 	//a, err := NewAWSOperator(&AWSOperatorConfig{
 	//	Config: &Config{

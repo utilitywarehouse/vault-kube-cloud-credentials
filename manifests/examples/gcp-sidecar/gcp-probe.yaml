@@ -23,7 +23,8 @@ spec:
           image: quay.io/utilitywarehouse/vault-kube-cloud-credentials
           args:
             - sidecar
-            - -vault-role=dev_gcp_$(POD_NAMESPACE)_$(POD_SERVICE_ACCOUNT)
+            - -vault-static-account=dev_gcp_$(POD_NAMESPACE)_$(POD_SERVICE_ACCOUNT)
+            - -secret-type=access_token
           env:
             - name: VAULT_ADDR
               value: "https://vault.example-namespace:8200"

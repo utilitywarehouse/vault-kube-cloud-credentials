@@ -3,7 +3,6 @@ package sidecar
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -16,9 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-var (
-	log = ctrl.Log.WithName("sidecar")
-)
+var log = ctrl.Log.WithName("sidecar")
 
 // Config configures the sidecar
 type Config struct {
@@ -77,9 +74,8 @@ func New(config *Config) (*Sidecar, error) {
 // Run starts the sidecar. It retrieves credentials from vault and serves them
 // for the configured cloud provider
 func (s *Sidecar) Run() error {
-	// Random is used for the backoff and the interval between renewal
-	// attempts
-	rand.Seed(int64(time.Now().Nanosecond()))
+	// Random is used for the backoff and the interval between renewal attempts
+	rnd := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
 
 	ready := make(chan bool, 1)
 
@@ -109,7 +105,7 @@ func (s *Sidecar) Run() error {
 			}
 
 			// Sleep until its time to renew the creds
-			time.Sleep(sleepDuration(duration))
+			time.Sleep(sleepDuration(duration, rnd))
 		}
 	}()
 
@@ -162,7 +158,7 @@ func (s *Sidecar) renew() (time.Duration, error) {
 	}
 
 	// Login to Vault via kube SA
-	jwt, err := ioutil.ReadFile(s.TokenPath)
+	jwt, err := os.ReadFile(s.TokenPath)
 	if err != nil {
 		return -1, err
 	}
@@ -212,7 +208,6 @@ func (s *Sidecar) reloadVaultCA() error {
 	}
 
 	return nil
-
 }
 
 // responseLogger wraps a http.ResponseWriter, recording elements of the
@@ -242,6 +237,6 @@ func instrumentHandlerLogging(next http.Handler) http.Handler {
 
 // Sleep for 1/3 of the lease duration with a random jitter to discourage synchronised API calls from
 // multiple instances of the application
-func sleepDuration(leaseDuration time.Duration) time.Duration {
-	return time.Duration((float64(leaseDuration.Nanoseconds()) * 1 / 3) * (rand.Float64() + 1.50) / 2)
+func sleepDuration(leaseDuration time.Duration, rnd *rand.Rand) time.Duration {
+	return time.Duration((float64(leaseDuration.Nanoseconds()) * 1 / 3) * (rnd.Float64() + 1.50) / 2)
 }

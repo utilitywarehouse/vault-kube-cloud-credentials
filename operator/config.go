@@ -2,25 +2,26 @@ package operator
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v2"
 )
 
-var (
-	defaultFileConfig = &fileConfig{
-		KubernetesAuthBackend: "kubernetes",
-		MetricsAddress:        ":8080",
-		Prefix:                "vkcc",
-		AWS: awsFileConfig{
-			DefaultTTL: 15 * time.Minute,
-			MinTTL:     15 * time.Minute,
-			Path:       "aws",
-		},
-	}
-)
+var defaultFileConfig = &fileConfig{
+	KubernetesAuthBackend: "kubernetes",
+	MetricsAddress:        ":8080",
+	Prefix:                "vkcc",
+	AWS: awsFileConfig{
+		DefaultTTL: 15 * time.Minute,
+		MinTTL:     15 * time.Minute,
+		Path:       "aws",
+	},
+	GCP: gcpFileConfig{
+		Path: "gcp",
+	},
+}
 
 type fileConfig struct {
 	// KubernetesAuthBackend is the mount path of the kubernetes auth
@@ -32,6 +33,8 @@ type fileConfig struct {
 	Prefix string `yaml:"prefix"`
 	// AWS is configuration for the AWS secret backend
 	AWS awsFileConfig `yaml:"aws"`
+	// GCP is configuration for the GCP secret backend
+	GCP gcpFileConfig `yaml:"gcp"`
 }
 
 type awsFileConfig struct {
@@ -45,27 +48,33 @@ type awsFileConfig struct {
 	Rules AWSRules `yaml:"rules"`
 }
 
+type gcpFileConfig struct {
+	// Path is the mount path of the GCP secret backend
+	Path string `yaml:"path"`
+	// Rules that govern which service accounts can assume which roles
+	Rules GCPRules `yaml:"rules"`
+}
+
 func loadConfigFromFile(file string) (*fileConfig, error) {
-	cfg := defaultFileConfig
+	defaultCfg := *defaultFileConfig
+
+	cfg := &defaultCfg
 
 	if file == "" {
 		return cfg, nil
 	}
 
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
+
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
 
 	if strings.Contains(cfg.Prefix, "_") {
 		return nil, fmt.Errorf("prefix must not contain a '_': %s", cfg.Prefix)
-	}
-
-	if cfg.AWS.Path == "" {
-		return nil, fmt.Errorf("aws.path can't be empty")
 	}
 
 	return cfg, nil

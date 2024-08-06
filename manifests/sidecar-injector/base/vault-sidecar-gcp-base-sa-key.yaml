@@ -1,0 +1,52 @@
+name: vault-sidecar-gcp-base
+prependContainers: true
+containers:
+  - name: vault-credentials-agent
+    image: quay.io/utilitywarehouse/vault-kube-cloud-credentials:latest
+    lifecycle:
+      postStart:
+        exec:
+          command:
+            - /bin/sh
+            - -c
+            - |
+              while ! nc -w 1 127.0.0.1 8098; do sleep 1; done
+    args:
+      - sidecar
+      - -vault-static-account=$(VKAC_ENVIRONMENT)_gcp_$(POD_NAMESPACE)_$(POD_SERVICE_ACCOUNT)
+      - -secret-type=service_account_key
+    env:
+      - name: VAULT_CACERT
+        value: "/etc/tls/ca.crt"
+      - name: VAULT_ADDR
+        value: "https://vault.sys-vault:8200"
+      - name: POD_NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      - name: POD_SERVICE_ACCOUNT
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.serviceAccountName
+    ports:
+      - name: metrics
+        containerPort: 8099
+        protocol: TCP
+    resources:
+      requests:
+        cpu: 0m
+        memory: 25Mi
+      limits:
+        cpu: 1000m
+        memory: 100Mi
+    volumeMounts:
+      - name: vault-tls
+        mountPath: /etc/tls
+env:
+  - name: GCP_CREDENTIALS_FILE
+    value: "/gcp/sa.json"
+
+volumes:
+  - name: vault-tls
+    configMap:
+      name: vault-tls

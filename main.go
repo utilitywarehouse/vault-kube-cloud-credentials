@@ -15,12 +15,15 @@ import (
 var (
 	operatorCommand        = flag.NewFlagSet("operator", flag.ExitOnError)
 	flagOperatorConfigFile = operatorCommand.String("config-file", "", "Path to a configuration file")
+	flagOperatorProvider   = operatorCommand.String("provider", "aws", "Cloud provider (one of 'aws' or 'gcp')")
 
-	sidecarCommand           = flag.NewFlagSet("sidecar", flag.ExitOnError)
-	flagSidecarKubeTokenPath = sidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
-	flagSidecarListenAddr    = sidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
-	flagSidecarOpsAddr       = sidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
-	flagSidecarVaultRole     = sidecarCommand.String("vault-role", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
+	sidecarCommand                = flag.NewFlagSet("sidecar", flag.ExitOnError)
+	flagSidecarKubeTokenPath      = sidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
+	flagSidecarListenAddr         = sidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
+	flagSidecarOpsAddr            = sidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
+	flagSidecarVaultRole          = sidecarCommand.String("vault-role", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
+	flagSidecarVaultStaticAccount = sidecarCommand.String("vault-static-account", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
+	flagSidecarSecretType         = sidecarCommand.String("secret-type", "access_token", "Secret type (one of 'service_account_key' or 'access_token')")
 
 	log = ctrl.Log.WithName("main")
 
@@ -75,7 +78,12 @@ func main() {
 			os.Exit(1)
 		}
 
-		o, err := operator.New(*flagOperatorConfigFile)
+		if *flagOperatorProvider == "" {
+			operatorCommand.PrintDefaults()
+			os.Exit(1)
+		}
+
+		o, err := operator.New(*flagOperatorConfigFile, *flagOperatorProvider)
 		if err != nil {
 			log.Error(err, "error creating operator")
 			os.Exit(1)
@@ -95,9 +103,20 @@ func main() {
 			os.Exit(1)
 		}
 
-		var pc sidecar.ProviderConfig
-		provider := vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultRole)[2]
+		var provider string
+		if *flagSidecarVaultStaticAccount != "" && *flagSidecarVaultRole != "" {
+			log.Error(nil, "Only one of 'vault-role' or 'vault-static-account' can be specified.")
+			os.Exit(1)
+		}
 
+		if *flagSidecarVaultStaticAccount != "" {
+			provider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultStaticAccount)[2]
+		}
+		if *flagSidecarVaultRole != "" {
+			provider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultRole)[2]
+		}
+
+		var pc sidecar.ProviderConfig
 		switch provider {
 		case "aws":
 			pc = &sidecar.AWSProviderConfig{
@@ -106,17 +125,25 @@ func main() {
 				Role:    *flagSidecarVaultRole,
 			}
 		case "gcp":
+			keyFilePath := os.Getenv("GCP_CREDENTIALS_FILE")
+			if keyFilePath == "" {
+				keyFilePath = "/gcp/sa.json"
+			}
+
 			pc = &sidecar.GCPProviderConfig{
-				Path:    "gcp",
-				RoleSet: *flagSidecarVaultRole,
+				Path:                   "gcp",
+				StaticAccount:          *flagSidecarVaultStaticAccount,
+				SecretType:             *flagSidecarSecretType,
+				KeyFileDestinationPath: keyFilePath,
 			}
 		default:
 			usage()
 			return
 		}
+
 		sidecarConfig := &sidecar.Config{
 			KubeAuthPath:   "kubernetes",
-			KubeAuthRole:   *flagSidecarVaultRole,
+			KubeAuthRole:   *flagSidecarVaultStaticAccount,
 			ListenAddress:  *flagSidecarListenAddr,
 			OpsAddress:     *flagSidecarOpsAddr,
 			ProviderConfig: pc,

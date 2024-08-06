@@ -1,0 +1,11 @@
+prefix: "dev"
+kubernetesAuthBackend: kubernetes
+gcp:
+  path: gcp
+  rules:
+    - namespacePatterns:
+        - kube-system
+        - system-*
+      serviceAccountEmailPatterns:
+        - foo@bar.iam.gserviceaccount.com
+        - baz-*@bar.iam.gserviceaccount.com

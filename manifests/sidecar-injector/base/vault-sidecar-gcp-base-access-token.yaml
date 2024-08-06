@@ -13,7 +13,8 @@ containers:
               while ! nc -w 1 127.0.0.1 8098; do sleep 1; done
     args:
       - sidecar
-      - -vault-role=$(VKAC_ENVIRONMENT)_gcp_$(POD_NAMESPACE)_$(POD_SERVICE_ACCOUNT)
+      - -vault-static-account=$(VKAC_ENVIRONMENT)_gcp_$(POD_NAMESPACE)_$(POD_SERVICE_ACCOUNT)
+      - -secret-type=access_token
     env:
       - name: VAULT_CACERT
         value: "/etc/tls/ca.crt"

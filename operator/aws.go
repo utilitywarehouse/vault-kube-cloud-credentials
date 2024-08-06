@@ -74,7 +74,7 @@ type AWSRule struct {
 func (ar *AWSRule) allows(namespace string, roleArn arn.ARN) (bool, error) {
 	accountIDAllowed := ar.matchesAccountID(roleArn.AccountID)
 
-	namespaceAllowed, err := ar.matchesNamespace(namespace)
+	namespaceAllowed, err := matchesNamespace(namespace, ar.NamespacePatterns)
 	if err != nil {
 		return false, err
 	}
@@ -102,22 +102,7 @@ func (ar *AWSRule) matchesAccountID(accountID string) bool {
 	return len(ar.AccountIDs) == 0
 }
 
-// matchesNamespace returns true if the rule allows the given namespace
-func (ar *AWSRule) matchesNamespace(namespace string) (bool, error) {
-	for _, np := range ar.NamespacePatterns {
-		match, err := filepath.Match(np, namespace)
-		if err != nil {
-			return false, err
-		}
-		if match {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-// matchesRoleName returns true if the rule allows the given role name
+// matchesRoleName returns true if the rule allows the given role
 func (ar *AWSRule) matchesRoleName(roleName string) (bool, error) {
 	for _, rp := range ar.RoleNamePatterns {
 		match, err := filepath.Match(rp, roleName)
@@ -331,23 +316,6 @@ func (o *AWSOperator) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(o)
 }
 
-// name returns a unique name for the key in vault, derived from the namespace and name of the
-// serviceaccount
-func (o *AWSOperator) name(namespace, serviceAccount string) string {
-	return o.Prefix + "_aws_" + namespace + "_" + serviceAccount
-}
-
-// parseKey parses a key from vault into its namespace and name. Also returns a
-// bool that indicates whether parsing was successful
-func (o *AWSOperator) parseKey(key string) (string, string, bool) {
-	keyParts := strings.Split(key, "_")
-	if len(keyParts) == 4 && keyParts[0] == o.Prefix && keyParts[1] == "aws" {
-		return keyParts[2], keyParts[3], true
-	}
-
-	return "", "", false
-}
-
 // renderAWSPolicyTemplate injects the provided name into a policy allowing access
 // to the corresponding AWS secret role
 func (o *AWSOperator) renderAWSPolicyTemplate(name string) (string, error) {
@@ -368,7 +336,7 @@ func (o *AWSOperator) renderAWSPolicyTemplate(name string) (string, error) {
 // writeToVault creates the kubernetes auth role and aws secret role required
 // for the given serviceaccount to login and assume the provided role arn
 func (o *AWSOperator) writeToVault(namespace, serviceAccount string, data map[string]interface{}) error {
-	n := o.name(namespace, serviceAccount)
+	n := name(o.Prefix, "_aws_", namespace, serviceAccount)
 
 	// Create policy for kubernetes auth role
 	policy, err := o.renderAWSPolicyTemplate(n)
@@ -404,7 +372,7 @@ func (o *AWSOperator) writeToVault(namespace, serviceAccount string, data map[st
 
 // removeFromVault removes the items from vault for the provided serviceaccount
 func (o *AWSOperator) removeFromVault(namespace, serviceAccount string) error {
-	n := o.name(namespace, serviceAccount)
+	n := name(o.Prefix, "_aws_", namespace, serviceAccount)
 
 	_, err := o.VaultClient.Logical().Delete(o.AWSPath + "/roles/" + n)
 	if err != nil {
@@ -413,7 +381,6 @@ func (o *AWSOperator) removeFromVault(namespace, serviceAccount string) error {
 	o.log.Info("Deleted AWS backend role", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
 	_, err = o.VaultClient.Logical().Delete("auth/" + o.KubernetesAuthBackend + "/role/" + n)
-
 	if err != nil {
 		return err
 	}
@@ -426,7 +393,6 @@ func (o *AWSOperator) removeFromVault(namespace, serviceAccount string) error {
 	o.log.Info("Deleted policy", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
 	return nil
-
 }
 
 // garbageCollect iterates through a list of keys from a vault list, finds items
@@ -439,7 +405,7 @@ func (o *AWSOperator) garbageCollect(keys []interface{}) error {
 			continue
 		}
 
-		namespace, name, parsed := o.parseKey(key)
+		namespace, name, parsed := parseKey(key, o.Prefix, "_aws_")
 		if parsed {
 			has, err := o.hasServiceAccount(namespace, name)
 			if err != nil {
