@@ -10,9 +10,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
-var (
-	log = ctrl.Log.WithName("operator")
-)
+var log = ctrl.Log.WithName("operator")
 
 // Config is the base configuration for an operator
 type Config struct {
@@ -23,14 +21,14 @@ type Config struct {
 	VaultConfig           *vault.Config
 }
 
-// Operator is responsible for providing access to cloud IAM roles for
+// Controller is responsible for providing access to cloud IAM roles for
 // Kubernetes serviceaccounts based on annotations
-type Operator struct {
+type Controller struct {
 	mgr ctrl.Manager
 }
 
 // New creates a new operator from the configuration in the provided file
-func New(configFile string) (*Operator, error) {
+func New(configFile string) (*Controller, error) {
 	fc, err := loadConfigFromFile(configFile)
 	if err != nil {
 		return nil, err
@@ -78,10 +76,10 @@ func New(configFile string) (*Operator, error) {
 		return nil, err
 	}
 
-	return &Operator{mgr: mgr}, nil
+	return &Controller{mgr: mgr}, nil
 }
 
 // Start runs the operator
-func (o *Operator) Start() error {
+func (o *Controller) Start() error {
 	return o.mgr.Start(ctrl.SetupSignalHandler())
 }
