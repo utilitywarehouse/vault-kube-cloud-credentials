@@ -9,18 +9,19 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var (
-	defaultFileConfig = &fileConfig{
-		KubernetesAuthBackend: "kubernetes",
-		MetricsAddress:        ":8080",
-		Prefix:                "vkcc",
-		AWS: awsFileConfig{
-			DefaultTTL: 15 * time.Minute,
-			MinTTL:     15 * time.Minute,
-			Path:       "aws",
-		},
-	}
-)
+var defaultFileConfig = &fileConfig{
+	KubernetesAuthBackend: "kubernetes",
+	MetricsAddress:        ":8080",
+	Prefix:                "vkcc",
+	AWS: awsFileConfig{
+		DefaultTTL: 15 * time.Minute,
+		MinTTL:     15 * time.Minute,
+		Path:       "aws",
+	},
+	GCP: gcpFileConfig{
+		Path: "gcp",
+	},
+}
 
 type fileConfig struct {
 	// KubernetesAuthBackend is the mount path of the kubernetes auth
@@ -32,6 +33,8 @@ type fileConfig struct {
 	Prefix string `yaml:"prefix"`
 	// AWS is configuration for the AWS secret backend
 	AWS awsFileConfig `yaml:"aws"`
+	// GCP is configuration for the GCP secret backend
+	GCP gcpFileConfig `yaml:"gcp"`
 }
 
 type awsFileConfig struct {
@@ -40,6 +43,13 @@ type awsFileConfig struct {
 	// MinTTL is the minimum default-sts-ttl value allowed to set
 	MinTTL time.Duration `yaml:"minTTL"`
 	// Path is the mount path of the AWS secret backend
+	Path string `yaml:"path"`
+	// Rules that govern which service accounts can assume which roles
+	Rules AWSRules `yaml:"rules"`
+}
+
+type gcpFileConfig struct {
+	// Path is the mount path of the AS secret backend
 	Path string `yaml:"path"`
 	// Rules that govern which service accounts can assume which roles
 	Rules AWSRules `yaml:"rules"`
