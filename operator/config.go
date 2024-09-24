@@ -49,7 +49,7 @@ type awsFileConfig struct {
 }
 
 type gcpFileConfig struct {
-	// Path is the mount path of the GCP secret backend
+	// Path is the mount path of the AS secret backend
 	Path string `yaml:"path"`
 	// Rules that govern which service accounts can assume which roles
 	Rules GCPRules `yaml:"rules"`
@@ -68,13 +68,16 @@ func loadConfigFromFile(file string) (*fileConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
 
 	if strings.Contains(cfg.Prefix, "_") {
 		return nil, fmt.Errorf("prefix must not contain a '_': %s", cfg.Prefix)
+	}
+
+	if cfg.AWS.Path == "" {
+		return nil, fmt.Errorf("aws.path can't be empty")
 	}
 
 	return cfg, nil

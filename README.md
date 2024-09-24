@@ -38,7 +38,7 @@ Cloud providers supported:
 ### Usage
 
 ```
-./vault-kube-cloud-credentials operator -provider=<provider> [-config-file=<path to config file>]
+./vault-kube-cloud-credentials operator -provider={aws|gcp} [-config-file=PATH_TO_CONFIG_FILE]
 ```
 
 Refer to the [example](manifests/operator/) for a reference Kubernetes
@@ -54,7 +54,7 @@ or, in case with GCP, will create a GCP static account at
 
 AWS kube serviceAccount example:
 
-```
+```yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -74,7 +74,7 @@ _GCP service account keys and access tokens have a default TTL of 1 hour._
 
 GCP kube serviceAccount example:
 
-```
+```yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -88,7 +88,7 @@ If you specify `vault.uw.systems/gcp-token-scopes` annotation you will receive
 GCP credentials in a form of access tokens. You can specify multiple scopes
 separated by comma.
 If that annotation is omitted the sidecar will fetch service account key in a
-form of JSON file and save that to the path specified in `GCP_CREDENTIALS_FILE`
+form of JSON file and save that to the path specified in `GOOGLE_APPLICATION_CREDENTIALS`
 env var (`/gcp/sa.json` by default).
 
 ### Config file
@@ -111,16 +111,16 @@ and namespaces prefixed with `system-` to assume roles under the `sysadmin/*` pa
 roles that begin with `sysadmin-` or a specific `org/s3-admin` role in the accounts
 `000000000000` and `111111111111`.
 
-```
+```yaml
 aws:
   rules:
     - namespacePatterns:
         - kube-system
         - system-*
       roleNamePatterns:
-       - sysadmin-*
-       - sysadmin/*
-       - org/s3-admin
+        - sysadmin-*
+        - sysadmin/*
+        - org/s3-admin
       accountIDs:
         - 000000000000
         - 111111111111
@@ -133,7 +133,7 @@ The following GCP configuration allows service accounts in `kube-system` get
 access to `foo@bar.iam.gserviceaccount.com` GCP service account and all accounts
 that start with `baz` in `bar` project.
 
-```
+```yaml
 gcp:
   rules:
     - namespacePatterns:

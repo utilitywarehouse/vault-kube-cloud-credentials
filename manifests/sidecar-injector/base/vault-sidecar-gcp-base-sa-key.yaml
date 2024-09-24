@@ -43,7 +43,7 @@ containers:
       - name: vault-tls
         mountPath: /etc/tls
 env:
-  - name: GCP_CREDENTIALS_FILE
+  - name: GOOGLE_APPLICATION_CREDENTIALS
     value: "/gcp/sa.json"
 
 volumes:

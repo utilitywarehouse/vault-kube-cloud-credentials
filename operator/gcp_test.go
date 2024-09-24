@@ -13,10 +13,10 @@ import (
 func TestGCPOperatorAdmitEvent(t *testing.T) {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	o := &GCPOperator{
-		GCPOperatorConfig: &GCPOperatorConfig{},
-		log:               ctrl.Log.WithName("operator").WithName("gcp"),
-	}
+	fc := &fileConfig{}
+	config := &Config{}
+	gcp, _ := NewGCPProvider(fc.GCP)
+	o, _ := NewOperator(config, gcp)
 
 	// Test that without any rules any valid event is admitted
 	assert.True(t, o.admitEvent("foobar", "foo@bar.gserviceaccount.com"))
@@ -30,7 +30,7 @@ func TestGCPOperatorAdmitEvent(t *testing.T) {
 	// Test that a malformed service account is not admitted (not a gserviceaccount.com email)
 	assert.False(t, o.admitEvent("foobar", "foo@bar.baz.com"))
 
-	o.Rules = GCPRules{
+	gcp.Rules = GCPRules{
 		GCPRule{
 			NamespacePatterns: []string{
 				"foo",

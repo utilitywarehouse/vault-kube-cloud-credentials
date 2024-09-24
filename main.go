@@ -78,11 +78,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		if *flagOperatorProvider == "" {
-			operatorCommand.PrintDefaults()
-			os.Exit(1)
-		}
-
 		o, err := operator.New(*flagOperatorConfigFile, *flagOperatorProvider)
 		if err != nil {
 			log.Error(err, "error creating operator")
@@ -103,21 +98,21 @@ func main() {
 			os.Exit(1)
 		}
 
-		var provider string
+		var sidecarProvider string
 		if *flagSidecarVaultStaticAccount != "" && *flagSidecarVaultRole != "" {
 			log.Error(nil, "Only one of 'vault-role' or 'vault-static-account' can be specified.")
 			os.Exit(1)
 		}
 
 		if *flagSidecarVaultStaticAccount != "" {
-			provider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultStaticAccount)[2]
+			sidecarProvider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultStaticAccount)[2]
 		}
 		if *flagSidecarVaultRole != "" {
-			provider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultRole)[2]
+			sidecarProvider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultRole)[2]
 		}
 
 		var pc sidecar.ProviderConfig
-		switch provider {
+		switch sidecarProvider {
 		case "aws":
 			pc = &sidecar.AWSProviderConfig{
 				Path:    "aws",
@@ -125,7 +120,7 @@ func main() {
 				Role:    *flagSidecarVaultRole,
 			}
 		case "gcp":
-			keyFilePath := os.Getenv("GCP_CREDENTIALS_FILE")
+			keyFilePath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 			if keyFilePath == "" {
 				keyFilePath = "/gcp/sa.json"
 			}
