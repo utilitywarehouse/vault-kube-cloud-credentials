@@ -2,7 +2,7 @@ package operator
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -52,7 +52,7 @@ type gcpFileConfig struct {
 	// Path is the mount path of the AS secret backend
 	Path string `yaml:"path"`
 	// Rules that govern which service accounts can assume which roles
-	Rules AWSRules `yaml:"rules"`
+	Rules GCPRules `yaml:"rules"`
 }
 
 func loadConfigFromFile(file string) (*fileConfig, error) {
@@ -62,7 +62,7 @@ func loadConfigFromFile(file string) (*fileConfig, error) {
 		return cfg, nil
 	}
 
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}

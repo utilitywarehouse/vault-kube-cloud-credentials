@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -313,6 +314,21 @@ func (o *Operator) hasServiceAccount(namespace, name string) (bool, error) {
 				serviceAccount.Namespace,
 				serviceAccount.Annotations[o.provider.secretIdentityAnnotation()],
 			) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// matchesNamespace returns true if the rule allows the given namespace
+func matchesNamespace(namespace string, namespacePatterns []string) (bool, error) {
+	for _, np := range namespacePatterns {
+		match, err := filepath.Match(np, namespace)
+		if err != nil {
+			return false, err
+		}
+		if match {
 			return true, nil
 		}
 	}

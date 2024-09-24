@@ -48,6 +48,7 @@ type AWS struct {
 	tmpl       *template.Template
 }
 
+// NewAWSProvider returns a configured AWS provider config
 func NewAWSProvider(config awsFileConfig) (*AWS, error) {
 	tmpl, err := template.New("policy").Parse(awsPolicyTemplate)
 	if err != nil {
@@ -63,10 +64,12 @@ func NewAWSProvider(config awsFileConfig) (*AWS, error) {
 	}, nil
 }
 
+// name returns the name of the AWS provider
 func (a *AWS) name() string {
 	return "aws"
 }
 
+// secretIdentityAnnotation returns
 func (a *AWS) secretIdentityAnnotation() string {
 	return awsRoleAnnotation
 }
@@ -76,10 +79,6 @@ func (a *AWS) secretPath() string {
 }
 
 func (a *AWS) processUpdateEvent(e event.UpdateEvent) bool {
-	// Update events are a special case, because we
-	// want to remove the roles in vault when the
-	// annotation is removed or changed to an
-	// invalid value.
 	return e.ObjectOld.GetAnnotations()[awsRoleAnnotation] != e.ObjectNew.GetAnnotations()[awsRoleAnnotation] ||
 		e.ObjectOld.GetAnnotations()[defaultSTSTTLAnnotation] != e.ObjectNew.GetAnnotations()[defaultSTSTTLAnnotation]
 }
@@ -162,7 +161,7 @@ func (ar AWSRules) allow(namespace, roleArn string) (bool, error) {
 func (ar *AWSRule) allows(namespace string, roleArn arn.ARN) (bool, error) {
 	accountIDAllowed := ar.matchesAccountID(roleArn.AccountID)
 
-	namespaceAllowed, err := ar.matchesNamespace(namespace)
+	namespaceAllowed, err := matchesNamespace(namespace, ar.NamespacePatterns)
 	if err != nil {
 		return false, err
 	}
@@ -188,21 +187,6 @@ func (ar *AWSRule) matchesAccountID(accountID string) bool {
 	}
 
 	return len(ar.AccountIDs) == 0
-}
-
-// matchesNamespace returns true if the rule allows the given namespace
-func (ar *AWSRule) matchesNamespace(namespace string) (bool, error) {
-	for _, np := range ar.NamespacePatterns {
-		match, err := filepath.Match(np, namespace)
-		if err != nil {
-			return false, err
-		}
-		if match {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 // matchesRoleName returns true if the rule allows the given role name
