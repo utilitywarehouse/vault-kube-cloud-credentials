@@ -8,9 +8,12 @@ bases:
 resources:
   - rbac.yaml
 configMapGenerator:
-  - name: vault-kube-cloud-credentials-operator
+  - name: vault-kube-cloud-credentials-operator-aws
     files:
-      - config.yaml=resources/operator-config.yaml
+      - config.yaml=resources/operator-aws-config.yaml
+  - name: vault-kube-cloud-credentials-operator-gcp
+    files:
+      - config.yaml=resources/operator-gcp-config.yaml
 secretGenerator:
   - name: vault
     envs:

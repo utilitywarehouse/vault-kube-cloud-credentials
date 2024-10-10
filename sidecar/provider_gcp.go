@@ -1,9 +1,11 @@
 package sidecar
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -71,8 +73,10 @@ type gceServiceAccountDetails struct {
 // GCPProviderConfig provides methods that allow the sidecar to retrieve and
 // serve GCP credentials from vault for the given configuration
 type GCPProviderConfig struct {
-	Path    string
-	RoleSet string
+	Path                   string
+	StaticAccount          string
+	SecretType             string
+	KeyFileDestinationPath string
 
 	creds    *GCPCredentials
 	metadata *gceMetadata
@@ -81,8 +85,19 @@ type GCPProviderConfig struct {
 // renew retrieves credentials from vault for the secret indicated in
 // the configuration
 func (gpc *GCPProviderConfig) renew(client *vault.Client) (time.Duration, error) {
-	// Get a credentials secret from vault for the role
-	secret, err := client.Logical().Read(gpc.Path + "/roleset/" + gpc.RoleSet + "/token")
+	switch gpc.SecretType {
+	case "access_token":
+		return gpc.renewToken(client)
+	case "service_account_key":
+		return gpc.renewKey(client)
+	default:
+		return -1, fmt.Errorf("Wrong secret type")
+	}
+}
+
+func (gpc *GCPProviderConfig) renewToken(client *vault.Client) (time.Duration, error) {
+	// Get a credentials secret from vault for the static account
+	secret, err := client.Logical().Read(gpc.Path + "/static-account/" + gpc.StaticAccount + "/token")
 	if err != nil {
 		return -1, err
 	}
@@ -122,32 +137,60 @@ func (gpc *GCPProviderConfig) renew(client *vault.Client) (time.Duration, error)
 	return leaseDuration, nil
 }
 
+func (gpc *GCPProviderConfig) renewKey(client *vault.Client) (time.Duration, error) {
+	// Get a credentials secret from vault for the static account
+	secret, err := client.Logical().Read(gpc.Path + "/static-account/" + gpc.StaticAccount + "/key")
+	if err != nil {
+		return -1, err
+	}
+
+	// Extract privete key data from the secret returned by Vault
+	privateKey := secret.Data["private_key_data"]
+	privateKeyDecoded, err := base64.StdEncoding.DecodeString(privateKey.(string))
+	if err != nil {
+		log.Error(err, "Error decoding private key")
+	}
+
+	// Save the service account json key in a file
+	err = os.WriteFile(gpc.KeyFileDestinationPath, []byte(privateKeyDecoded), 0600)
+	if err != nil {
+		log.Error(err, "Error saving google service account key file")
+	}
+
+	// Convert the secret's TTL into a time.Duration
+	leaseDuration := time.Duration(secret.LeaseDuration) * time.Second
+
+	// Calculate expiry time
+	expiresAt := time.Now().Add(leaseDuration)
+
+	var keyData map[string]interface{}
+	err = json.Unmarshal(privateKeyDecoded, &keyData)
+	if err != nil {
+		return -1, err
+	}
+
+	log.Info("new gcp credentials",
+		"expiration", expiresAt.Format("2006-01-02 15:04:05"),
+		"project", keyData["project_id"],
+		"service_account_email", keyData["client_email"],
+	)
+
+	return leaseDuration, nil
+}
+
 // updateMetadata extracts metadata from the roleset in vault
 func (gpc *GCPProviderConfig) updateMetadata(client *vault.Client) error {
-	roleset, err := client.Logical().Read(gpc.Path + "/roleset/" + gpc.RoleSet)
+	sa, err := client.Logical().Read(gpc.Path + "/static-account/" + gpc.StaticAccount)
 	if err != nil {
 		return err
 	}
 
-	var scopes []string
-	tokenScopes, ok := roleset.Data["token_scopes"].([]interface{})
-	if !ok {
-		return fmt.Errorf("token_scopes is not a []interface{}")
-	}
-	for _, ts := range tokenScopes {
-		scope, ok := ts.(string)
-		if !ok {
-			return fmt.Errorf("scope is not a string")
-		}
-		scopes = append(scopes, scope)
-	}
-
-	project, ok := roleset.Data["project"].(string)
+	project, ok := sa.Data["service_account_project"].(string)
 	if !ok {
 		return fmt.Errorf("project is not a string")
 	}
 
-	email, ok := roleset.Data["service_account_email"].(string)
+	email, ok := sa.Data["service_account_email"].(string)
 	if !ok {
 		return fmt.Errorf("service_account_email is not a string")
 	}
@@ -155,7 +198,6 @@ func (gpc *GCPProviderConfig) updateMetadata(client *vault.Client) error {
 	gpc.metadata = &gceMetadata{
 		email:   email,
 		project: project,
-		scopes:  scopes,
 	}
 
 	return nil
@@ -164,6 +206,10 @@ func (gpc *GCPProviderConfig) updateMetadata(client *vault.Client) error {
 // setupEndpoints adds the endpoints required to masquerade
 // as the GCE metdata service
 func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
+	if gpc.SecretType == "service_account_key" {
+		return
+	}
+
 	r.HandleFunc("/computeMetadata/v1/instance/service-accounts/{service_account}/token", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if gpc.creds == nil {
@@ -214,14 +260,14 @@ func (gpc *GCPProviderConfig) setupEndpoints(r *mux.Router) {
 			return
 		}
 		if err := json.NewEncoder(w).Encode(map[string]*gceServiceAccountDetails{
-			"default": &gceServiceAccountDetails{
+			"default": {
 				Aliases: []string{
 					"default",
 				},
 				Email:  gpc.metadata.email,
 				Scopes: gpc.metadata.scopes,
 			},
-			gpc.metadata.email: &gceServiceAccountDetails{
+			gpc.metadata.email: {
 				Aliases: []string{
 					"default",
 				},

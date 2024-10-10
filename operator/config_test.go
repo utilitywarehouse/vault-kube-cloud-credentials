@@ -34,12 +34,14 @@ func Test_loadConfigFromFile(t *testing.T) {
 					DefaultTTL: 900000000000,
 					MinTTL:     900000000000,
 					Path:       "aws",
-					Rules:      AWSRules(nil),
+				},
+				GCP: gcpFileConfig{
+					Path: "gcp",
 				},
 			},
 			false,
 		}, {
-			"customConfig",
+			"customAWSConfig",
 			args{`
 metricsAddress:  ":8081"
 prefix: test-1
@@ -47,12 +49,12 @@ aws:
   defaultTTL: 1h
   minTTL: 30m
   rules:
-   - namespacePatterns:
-      - kube-system
-     roleNamePatterns:
-      - system-*
-     accountIDs:
-      - "123456789"
+    - namespacePatterns:
+        - kube-system
+      roleNamePatterns:
+        - system-*
+      accountIDs:
+        - "123456789"
 `},
 			&fileConfig{
 				KubernetesAuthBackend: "kubernetes",
@@ -70,13 +72,49 @@ aws:
 						},
 					},
 				},
+				GCP: gcpFileConfig{
+					Path: "gcp",
+				},
+			},
+			false,
+		}, {
+			"customGCPConfig",
+			args{`
+metricsAddress:  ":8081"
+prefix: test-1
+gcp:
+  rules:
+    - namespacePatterns:
+        - kube-system
+        - sys-*
+      serviceAccountEmailPatterns:
+        - foo@baz.iam.gserviceaccount.com
+        - bar-*@baz.iam.gserviceaccount.com
+`},
+			&fileConfig{
+				KubernetesAuthBackend: "kubernetes",
+				MetricsAddress:        ":8081",
+				Prefix:                "test-1",
+				AWS: awsFileConfig{
+					DefaultTTL: 900000000000,
+					MinTTL:     900000000000,
+					Path:       "aws",
+				},
+				GCP: gcpFileConfig{
+					Path: "gcp",
+					Rules: GCPRules{
+						GCPRule{
+							NamespacePatterns:       []string{"kube-system", "sys-*"},
+							ServiceAccEmailPatterns: []string{"foo@baz.iam.gserviceaccount.com", "bar-*@baz.iam.gserviceaccount.com"},
+						},
+					},
+				},
 			},
 			false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			file, err := os.OpenFile(tmpConf.Name(), os.O_WRONLY|os.O_TRUNC, 0777)
 			if err != nil {
 				t.Fatal(err)
@@ -86,11 +124,11 @@ aws:
 
 			got, err := loadConfigFromFile(tmpConf.Name())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("loadConfigFromFile() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("loadConfigFromFile()\ngotErr: %v\nwantErr: %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("loadConfigFromFile() = %v, want %v", got, tt.want)
+				t.Errorf("loadConfigFromFile()\ngot: %v\nwant: %v", got, tt.want)
 			}
 		})
 	}
