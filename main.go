@@ -112,6 +112,7 @@ func main() {
 		}
 
 		var pc sidecar.ProviderConfig
+		var kubeAuthRole string
 		switch sidecarProvider {
 		case "aws":
 			pc = &sidecar.AWSProviderConfig{
@@ -119,6 +120,7 @@ func main() {
 				RoleArn: "",
 				Role:    *flagSidecarVaultRole,
 			}
+			kubeAuthRole = *flagSidecarVaultRole
 		case "gcp":
 			keyFilePath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 			if keyFilePath == "" {
@@ -131,6 +133,7 @@ func main() {
 				SecretType:             *flagSidecarSecretType,
 				KeyFileDestinationPath: keyFilePath,
 			}
+			kubeAuthRole = *flagSidecarVaultStaticAccount
 		default:
 			usage()
 			return
@@ -138,7 +141,7 @@ func main() {
 
 		sidecarConfig := &sidecar.Config{
 			KubeAuthPath:   "kubernetes",
-			KubeAuthRole:   *flagSidecarVaultStaticAccount,
+			KubeAuthRole:   kubeAuthRole,
 			ListenAddress:  *flagSidecarListenAddr,
 			OpsAddress:     *flagSidecarOpsAddr,
 			ProviderConfig: pc,
