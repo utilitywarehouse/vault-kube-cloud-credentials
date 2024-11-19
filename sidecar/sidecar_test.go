@@ -1,7 +1,6 @@
 package sidecar
 
 import (
-	"fmt"
 	"math/rand"
 	"slices"
 	"testing"
@@ -16,10 +15,10 @@ func Test_sleepDuration(t *testing.T) {
 		leaseDuration  time.Duration
 		wantRenewAfter time.Duration
 	}{
-		{"1", 60 * time.Minute, 15 * time.Minute},
-		{"2", 30 * time.Minute, 6 * time.Minute},
-		{"3", 10 * time.Minute, 2 * time.Minute},
-		{"4", 5 * time.Minute, 1 * time.Minute},
+		{"1", 60 * time.Minute, 55 * time.Minute},
+		{"2", 30 * time.Minute, 27 * time.Minute},
+		{"3", 10 * time.Minute, 9 * time.Minute},
+		{"4", 5 * time.Minute, 4 * time.Minute},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -27,7 +26,6 @@ func Test_sleepDuration(t *testing.T) {
 			var old []time.Duration
 			for i := 0; i < 10; i++ {
 				got := sleepDuration(tt.leaseDuration, rnd)
-				fmt.Println(got)
 				if got < tt.wantRenewAfter || got >= tt.leaseDuration {
 					t.Errorf("sleepDuration() = %v, want > %v", got, tt.wantRenewAfter)
 				}
