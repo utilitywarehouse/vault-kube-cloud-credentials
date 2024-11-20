@@ -15,7 +15,7 @@ var defaultFileConfig = &fileConfig{
 	Prefix:                "vkcc",
 	AWS: awsFileConfig{
 		DefaultTTL: 15 * time.Minute,
-		MinTTL:     15 * time.Minute,
+		MinTTL:     15 * time.Minute, // min allowed STS TTL by AWS is 15m
 		Path:       "aws",
 	},
 	GCP: gcpFileConfig{
