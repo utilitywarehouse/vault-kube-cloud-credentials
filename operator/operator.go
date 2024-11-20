@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -31,6 +32,7 @@ type provider interface {
 	renderPolicyTemplate(name string) (string, error)
 	secretIdentityAnnotation() string
 	secretPath() string
+	secretTTL(serviceAccount *corev1.ServiceAccount) (time.Duration, error)
 	secretPayload(serviceAccount *corev1.ServiceAccount) (map[string]interface{}, error)
 }
 
@@ -141,7 +143,12 @@ func (o *Operator) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result
 		return ctrl.Result{}, err
 	}
 
-	err = o.writeToVault(req.Namespace, req.Name, payload)
+	secretTTL, err := o.provider.secretTTL(serviceAccount)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	err = o.writeToVault(req.Namespace, req.Name, payload, secretTTL)
 
 	return ctrl.Result{}, err
 }
@@ -213,7 +220,7 @@ func (o *Operator) parseKey(key string) (string, string, bool) {
 // writeToVault creates the kubernetes auth role and aws secret role gcp static
 // account required for the given k8s serviceAccount to login and use the
 // provided AWS role arn or GCP service account.
-func (o *Operator) writeToVault(namespace, serviceAccount string, data map[string]interface{}) error {
+func (o *Operator) writeToVault(namespace, serviceAccount string, data map[string]interface{}, secretTTL time.Duration) error {
 	n := o.name(namespace, serviceAccount)
 
 	// Create policy for kubernetes auth role
@@ -233,7 +240,15 @@ func (o *Operator) writeToVault(namespace, serviceAccount string, data map[strin
 		"bound_service_account_names":      []string{serviceAccount},
 		"bound_service_account_namespaces": []string{namespace},
 		"policies":                         []string{"default", n},
-		"ttl":                              900,
+
+		// Set token lease duration same as the actual secret ttl
+		// GCP service Account key is associated with a Vault lease.
+		// When the lease expires, the service account key is automatically revoked.
+		// AWS IAM credentials are time-based and are automatically revoked when the Vault lease expires.
+		// https://github.com/hashicorp/vault-plugin-secrets-gcp/issues/141#issuecomment-1315703226
+		// https://github.com/hashicorp/vault/issues/10443
+		// token lease ttl doesn't have affect on AWS STS credentials as they cannot be revoked/renewed.
+		"ttl": secretTTL.Seconds(),
 	}); err != nil {
 		return err
 	}

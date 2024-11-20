@@ -48,7 +48,6 @@ type GCPRule struct {
 // GCPOperatorConfig provides configuration when creating a new Operator
 type GCP struct {
 	DefaultTTL time.Duration
-	MinTTL     time.Duration
 	Path       string
 	Rules      GCPRules
 	tmpl       *template.Template
@@ -84,6 +83,13 @@ func (g *GCP) secretPath() string {
 func (g *GCP) processUpdateEvent(e event.UpdateEvent) bool {
 	return e.ObjectOld.GetAnnotations()[gcpServiceAccountAnnotation] != e.ObjectNew.GetAnnotations()[gcpServiceAccountAnnotation] ||
 		e.ObjectOld.GetAnnotations()[gcpScopeAnnotation] != e.ObjectNew.GetAnnotations()[gcpScopeAnnotation]
+}
+
+func (g *GCP) secretTTL(serviceAccount *corev1.ServiceAccount) (time.Duration, error) {
+	if g.DefaultTTL != 0 {
+		return g.DefaultTTL, nil
+	}
+	return time.Hour, nil
 }
 
 func (g *GCP) secretPayload(serviceAccount *corev1.ServiceAccount) (map[string]interface{}, error) {
@@ -168,6 +174,9 @@ func (gcr *GCPRule) allows(namespace string, serviceAccountEmail string) (bool, 
 	}
 
 	serviceAccountAllowed, err := gcr.matchesServiceAccountEmail(serviceAccountEmail)
+	if err != nil {
+		return false, err
+	}
 
 	return namespaceAllowed && serviceAccountAllowed, nil
 }

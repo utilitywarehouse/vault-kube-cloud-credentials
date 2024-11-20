@@ -83,26 +83,36 @@ func (a *AWS) processUpdateEvent(e event.UpdateEvent) bool {
 		e.ObjectOld.GetAnnotations()[defaultSTSTTLAnnotation] != e.ObjectNew.GetAnnotations()[defaultSTSTTLAnnotation]
 }
 
-func (a *AWS) secretPayload(serviceAccount *corev1.ServiceAccount) (map[string]interface{}, error) {
+func (a *AWS) secretTTL(serviceAccount *corev1.ServiceAccount) (time.Duration, error) {
 	var err error
 	// check if default-sts-ttl is set if not use config default
-	defaultTTL := a.DefaultTTL
+	secretTTL := a.DefaultTTL
 	if v, ok := serviceAccount.Annotations[defaultSTSTTLAnnotation]; ok {
-		defaultTTL, err = time.ParseDuration(v)
+		secretTTL, err = time.ParseDuration(v)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing default_sts_ttl %w", err)
+			return 0, fmt.Errorf("error parsing default_sts_ttl %w", err)
 		}
 	}
 
-	if defaultTTL < a.MinTTL {
-		return nil, fmt.Errorf("minimum default-sts-ttl value allowed is %s, its set to %s", a.MinTTL, defaultTTL)
+	if secretTTL < a.MinTTL {
+		return 0, fmt.Errorf("minimum default-sts-ttl value allowed is %s, its set to %s", a.MinTTL, secretTTL)
 	}
-	if defaultTTL > maxSTSTTLDuration {
-		return nil, fmt.Errorf("maximum default-sts-ttl value allowed is %s, its set to %s", maxSTSTTLDuration, defaultTTL)
+	if secretTTL > maxSTSTTLDuration {
+		return 0, fmt.Errorf("maximum default-sts-ttl value allowed is %s, its set to %s", maxSTSTTLDuration, secretTTL)
+	}
+
+	return secretTTL, nil
+}
+
+func (a *AWS) secretPayload(serviceAccount *corev1.ServiceAccount) (map[string]interface{}, error) {
+
+	secretTTL, err := a.secretTTL(serviceAccount)
+	if err != nil {
+		return nil, fmt.Errorf("unable to set secret ttl err: %w", err)
 	}
 
 	return map[string]interface{}{
-		"default_sts_ttl": int(defaultTTL.Seconds()),
+		"default_sts_ttl": int(secretTTL.Seconds()),
 		"role_arns":       []string{serviceAccount.Annotations[awsRoleAnnotation]},
 		"credential_type": "assumed_role",
 
