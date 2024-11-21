@@ -1,8 +1,8 @@
 package sidecar
 
 import (
+	"context"
 	"crypto/tls"
-	"fmt"
 	"math/rand"
 	"net/http"
 	"os"
@@ -35,6 +35,7 @@ type Sidecar struct {
 	vaultClient    *vault.Client
 	vaultConfig    *vault.Config
 	vaultTLSConfig *tls.Config
+	reAuthRequired bool
 }
 
 // New returns a sidecar with the provided config
@@ -74,6 +75,8 @@ func New(config *Config) (*Sidecar, error) {
 // Run starts the sidecar. It retrieves credentials from vault and serves them
 // for the configured cloud provider
 func (s *Sidecar) Run() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// Random is used for the backoff and the interval between renewal attempts
 	rnd := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
 
@@ -82,7 +85,7 @@ func (s *Sidecar) Run() error {
 	go func() {
 		firstRun := true
 		for {
-			duration, err := s.renew()
+			duration, err := s.renew(ctx)
 			if err != nil {
 				if firstRun {
 					log.Error(err, "error renewing credentials")
@@ -151,32 +154,13 @@ func (s *Sidecar) Run() error {
 }
 
 // renew the credentials
-func (s *Sidecar) renew() (time.Duration, error) {
+func (s *Sidecar) renew(ctx context.Context) (time.Duration, error) {
 	// Reload vault CA from the environment
 	if err := s.reloadVaultCA(); err != nil {
 		return -1, err
 	}
 
-	// Login to Vault via kube SA
-	jwt, err := os.ReadFile(s.TokenPath)
-	if err != nil {
-		return -1, err
-	}
-	loginPath := "auth/" + s.KubeAuthPath + "/login"
-	secret, err := s.vaultClient.Logical().Write(loginPath, map[string]interface{}{
-		"jwt":  string(jwt),
-		"role": s.KubeAuthRole,
-	})
-	if err != nil {
-		return -1, err
-	}
-	if secret == nil {
-		return -1, fmt.Errorf("no secret returned by %s", loginPath)
-	}
-	if secret.Auth == nil {
-		return -1, fmt.Errorf("no authentication information attached to the response from %s", loginPath)
-	}
-	s.vaultClient.SetToken(secret.Auth.ClientToken)
+	s.login(ctx)
 
 	// Renew credentials for the provider
 	return s.ProviderConfig.renew(s.vaultClient)
