@@ -15,6 +15,7 @@ import (
 const (
 	gcpServiceAccountAnnotation = "vault.uw.systems/gcp-service-account"
 	gcpScopeAnnotation          = "vault.uw.systems/gcp-token-scopes"
+	defaultGCPKeyTTLAnnotation  = "vault.uw.systems/default-gcp-key-ttl"
 )
 
 var gcpPolicyTemplate = `
@@ -86,10 +87,17 @@ func (g *GCP) processUpdateEvent(e event.UpdateEvent) bool {
 }
 
 func (g *GCP) secretTTL(serviceAccount *corev1.ServiceAccount) (time.Duration, error) {
-	if g.DefaultTTL != 0 {
-		return g.DefaultTTL, nil
+	var err error
+
+	secretTTL := g.DefaultTTL
+	if v, ok := serviceAccount.Annotations[defaultGCPKeyTTLAnnotation]; ok {
+		secretTTL, err = time.ParseDuration(v)
+		if err != nil {
+			return 0, fmt.Errorf("error parsing default-gcp-key-ttl %w", err)
+		}
 	}
-	return time.Hour, nil
+
+	return secretTTL, nil
 }
 
 func (g *GCP) secretPayload(serviceAccount *corev1.ServiceAccount) (map[string]interface{}, error) {

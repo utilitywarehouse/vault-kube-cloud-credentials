@@ -19,7 +19,8 @@ var defaultFileConfig = &fileConfig{
 		Path:       "aws",
 	},
 	GCP: gcpFileConfig{
-		Path: "gcp",
+		Path:       "gcp",
+		DefaultTTL: 15 * time.Minute,
 	},
 }
 
@@ -49,6 +50,8 @@ type awsFileConfig struct {
 }
 
 type gcpFileConfig struct {
+	// DefaultTTL is the default ttl of credentials that are issued for a role if not set
+	DefaultTTL time.Duration `yaml:"defaultTTL"`
 	// Path is the mount path of the AS secret backend
 	Path string `yaml:"path"`
 	// Rules that govern which service accounts can assume which roles

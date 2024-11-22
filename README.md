@@ -90,6 +90,8 @@ separated by comma.
 If that annotation is omitted the sidecar will fetch service account key in a
 form of JSON file and save that to the path specified in `GOOGLE_APPLICATION_CREDENTIALS`
 env var (`/gcp/sa.json` by default).
+`vault.uw.systems/default-gcp-key-ttl` annotation can be used to set initial lease
+ttl for the key. if this key is not renewed and expired then vault will delete key from GCP.
 
 ### Config file
 
