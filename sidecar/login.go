@@ -65,7 +65,9 @@ func (s *Sidecar) login(ctx context.Context) error {
 				break
 			}
 
-			log.Info("new login renewed", "renewable", secret.Auth.Renewable, "lease", secret.Auth.LeaseDuration)
+			// Calculate expiry time
+			expiresAt := time.Now().Add(time.Duration(secret.Auth.LeaseDuration) * time.Second)
+			log.Info("login token lease renewed", "lease_expiration", expiresAt.Format("2006-01-02 15:04:05"))
 		}
 		// unable to renew login token or its not renewable
 		s.reAuthRequired = true
