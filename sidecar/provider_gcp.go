@@ -13,7 +13,7 @@ import (
 	vault "github.com/hashicorp/vault/api"
 )
 
-const gcpKeyLeaseIncrementSec = 900
+const gcpKeyLeaseIncrementSec = 3600
 
 // GCPCredentials are the credentials served by the API
 type GCPCredentials struct {

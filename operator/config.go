@@ -20,7 +20,7 @@ var defaultFileConfig = &fileConfig{
 	},
 	GCP: gcpFileConfig{
 		Path:       "gcp",
-		DefaultTTL: 15 * time.Minute,
+		DefaultTTL: 1 * time.Hour,
 	},
 }
 

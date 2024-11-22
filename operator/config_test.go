@@ -36,7 +36,7 @@ func Test_loadConfigFromFile(t *testing.T) {
 					Path:       "aws",
 				},
 				GCP: gcpFileConfig{
-					DefaultTTL: 900000000000,
+					DefaultTTL: 3600000000000,
 					Path:       "gcp",
 				},
 			},
@@ -74,7 +74,7 @@ aws:
 					},
 				},
 				GCP: gcpFileConfig{
-					DefaultTTL: 900000000000,
+					DefaultTTL: 3600000000000,
 					Path:       "gcp",
 				},
 			},
@@ -85,7 +85,7 @@ aws:
 metricsAddress:  ":8081"
 prefix: test-1
 gcp:
-  defaultTTL: 1h
+  defaultTTL: 30m
   rules:
     - namespacePatterns:
         - kube-system
@@ -104,7 +104,7 @@ gcp:
 					Path:       "aws",
 				},
 				GCP: gcpFileConfig{
-					DefaultTTL: 3600000000000,
+					DefaultTTL: 1800000000000,
 					Path:       "gcp",
 					Rules: GCPRules{
 						GCPRule{
