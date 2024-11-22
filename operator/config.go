@@ -15,11 +15,12 @@ var defaultFileConfig = &fileConfig{
 	Prefix:                "vkcc",
 	AWS: awsFileConfig{
 		DefaultTTL: 15 * time.Minute,
-		MinTTL:     15 * time.Minute,
+		MinTTL:     15 * time.Minute, // min allowed STS TTL by AWS is 15m
 		Path:       "aws",
 	},
 	GCP: gcpFileConfig{
-		Path: "gcp",
+		Path:       "gcp",
+		DefaultTTL: 1 * time.Hour,
 	},
 }
 
@@ -49,6 +50,8 @@ type awsFileConfig struct {
 }
 
 type gcpFileConfig struct {
+	// DefaultTTL is the default ttl of credentials that are issued for a role if not set
+	DefaultTTL time.Duration `yaml:"defaultTTL"`
 	// Path is the mount path of the AS secret backend
 	Path string `yaml:"path"`
 	// Rules that govern which service accounts can assume which roles

@@ -13,6 +13,8 @@ import (
 	vault "github.com/hashicorp/vault/api"
 )
 
+const gcpKeyLeaseIncrementSec = 3600
+
 // GCPCredentials are the credentials served by the API
 type GCPCredentials struct {
 	AccessToken  string `json:"access_token"`
@@ -80,6 +82,7 @@ type GCPProviderConfig struct {
 
 	creds    *GCPCredentials
 	metadata *gceMetadata
+	leaseID  string
 }
 
 // renew retrieves credentials from vault for the secret indicated in
@@ -91,7 +94,7 @@ func (gpc *GCPProviderConfig) renew(client *vault.Client) (time.Duration, error)
 	case "service_account_key":
 		return gpc.renewKey(client)
 	default:
-		return -1, fmt.Errorf("Wrong secret type")
+		return -1, fmt.Errorf("wrong secret type")
 	}
 }
 
@@ -137,7 +140,31 @@ func (gpc *GCPProviderConfig) renewToken(client *vault.Client) (time.Duration, e
 	return leaseDuration, nil
 }
 
+// GCP Key has some limitations https://developer.hashicorp.com/vault/docs/secrets/gcp#service-account-keys-quota-limits
+// so instead of requesting new key when old key lease is expired we will keep
+// renewing lease. so that only 1 key will be used for the lifecycle of the pod
+// this also helps with the application which do not re-read keys.
 func (gpc *GCPProviderConfig) renewKey(client *vault.Client) (time.Duration, error) {
+	if gpc.leaseID == "" {
+		return gpc.newKey(client)
+	}
+
+	secret, err := client.Sys().Renew(gpc.leaseID, gcpKeyLeaseIncrementSec)
+	if err != nil {
+		log.Error(err, "unable to renew key lease attempting to get new key")
+		return gpc.newKey(client)
+	}
+
+	// Calculate expiry time
+	expiresAt := time.Now().Add(time.Duration(secret.LeaseDuration) * time.Second)
+	log.Info("gcp key lease renewed",
+		"lease_expiration", expiresAt.Format("2006-01-02 15:04:05"),
+	)
+
+	return time.Duration(secret.LeaseDuration) * time.Second, nil
+}
+
+func (gpc *GCPProviderConfig) newKey(client *vault.Client) (time.Duration, error) {
 	// Get a credentials secret from vault for the static account
 	secret, err := client.Logical().Read(gpc.Path + "/static-account/" + gpc.StaticAccount + "/key")
 	if err != nil {
@@ -170,11 +197,12 @@ func (gpc *GCPProviderConfig) renewKey(client *vault.Client) (time.Duration, err
 	}
 
 	log.Info("new gcp credentials",
-		"expiration", expiresAt.Format("2006-01-02 15:04:05"),
+		"lease_expiration", expiresAt.Format("2006-01-02 15:04:05"),
 		"project", keyData["project_id"],
 		"service_account_email", keyData["client_email"],
 	)
 
+	gpc.leaseID = secret.LeaseID
 	return leaseDuration, nil
 }
 

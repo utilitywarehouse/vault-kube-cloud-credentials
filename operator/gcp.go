@@ -15,6 +15,7 @@ import (
 const (
 	gcpServiceAccountAnnotation = "vault.uw.systems/gcp-service-account"
 	gcpScopeAnnotation          = "vault.uw.systems/gcp-token-scopes"
+	defaultGCPKeyTTLAnnotation  = "vault.uw.systems/default-gcp-key-ttl"
 )
 
 var gcpPolicyTemplate = `
@@ -48,7 +49,6 @@ type GCPRule struct {
 // GCPOperatorConfig provides configuration when creating a new Operator
 type GCP struct {
 	DefaultTTL time.Duration
-	MinTTL     time.Duration
 	Path       string
 	Rules      GCPRules
 	tmpl       *template.Template
@@ -84,6 +84,20 @@ func (g *GCP) secretPath() string {
 func (g *GCP) processUpdateEvent(e event.UpdateEvent) bool {
 	return e.ObjectOld.GetAnnotations()[gcpServiceAccountAnnotation] != e.ObjectNew.GetAnnotations()[gcpServiceAccountAnnotation] ||
 		e.ObjectOld.GetAnnotations()[gcpScopeAnnotation] != e.ObjectNew.GetAnnotations()[gcpScopeAnnotation]
+}
+
+func (g *GCP) secretTTL(serviceAccount *corev1.ServiceAccount) (time.Duration, error) {
+	var err error
+
+	secretTTL := g.DefaultTTL
+	if v, ok := serviceAccount.Annotations[defaultGCPKeyTTLAnnotation]; ok {
+		secretTTL, err = time.ParseDuration(v)
+		if err != nil {
+			return 0, fmt.Errorf("error parsing default-gcp-key-ttl %w", err)
+		}
+	}
+
+	return secretTTL, nil
 }
 
 func (g *GCP) secretPayload(serviceAccount *corev1.ServiceAccount) (map[string]interface{}, error) {
@@ -168,6 +182,9 @@ func (gcr *GCPRule) allows(namespace string, serviceAccountEmail string) (bool, 
 	}
 
 	serviceAccountAllowed, err := gcr.matchesServiceAccountEmail(serviceAccountEmail)
+	if err != nil {
+		return false, err
+	}
 
 	return namespaceAllowed && serviceAccountAllowed, nil
 }
