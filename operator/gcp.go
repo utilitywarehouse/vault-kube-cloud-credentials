@@ -62,9 +62,11 @@ func NewGCPProvider(config gcpFileConfig) (*GCP, error) {
 	}
 
 	return &GCP{
-		tmpl:  tmpl,
-		Path:  config.Path,
-		Rules: config.Rules,
+		tmpl: tmpl,
+
+		DefaultTTL: config.DefaultTTL,
+		Path:       config.Path,
+		Rules:      config.Rules,
 	}, nil
 }
 
