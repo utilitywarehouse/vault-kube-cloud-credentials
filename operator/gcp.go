@@ -83,7 +83,8 @@ func (g *GCP) secretPath() string {
 
 func (g *GCP) processUpdateEvent(e event.UpdateEvent) bool {
 	return e.ObjectOld.GetAnnotations()[gcpServiceAccountAnnotation] != e.ObjectNew.GetAnnotations()[gcpServiceAccountAnnotation] ||
-		e.ObjectOld.GetAnnotations()[gcpScopeAnnotation] != e.ObjectNew.GetAnnotations()[gcpScopeAnnotation]
+		e.ObjectOld.GetAnnotations()[gcpScopeAnnotation] != e.ObjectNew.GetAnnotations()[gcpScopeAnnotation] ||
+		e.ObjectOld.GetAnnotations()[defaultGCPKeyTTLAnnotation] != e.ObjectNew.GetAnnotations()[defaultGCPKeyTTLAnnotation]
 }
 
 func (g *GCP) secretTTL(serviceAccount *corev1.ServiceAccount) (time.Duration, error) {
