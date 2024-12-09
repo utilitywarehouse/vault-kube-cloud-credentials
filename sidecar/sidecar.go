@@ -35,7 +35,6 @@ type Sidecar struct {
 	vaultClient    *vault.Client
 	vaultConfig    *vault.Config
 	vaultTLSConfig *tls.Config
-	reAuthRequired bool
 }
 
 // New returns a sidecar with the provided config
@@ -77,6 +76,13 @@ func New(config *Config) (*Sidecar, error) {
 func (s *Sidecar) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	loggedIn := make(chan bool, 1)
+
+	go s.manageLoginToken(ctx, loggedIn)
+
+	<-loggedIn
+
 	// Random is used for the backoff and the interval between renewal attempts
 	rnd := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
 
@@ -159,8 +165,6 @@ func (s *Sidecar) renew(ctx context.Context) (time.Duration, error) {
 	if err := s.reloadVaultCA(); err != nil {
 		return -1, err
 	}
-
-	s.login(ctx)
 
 	// Renew credentials for the provider
 	return s.ProviderConfig.renew(s.vaultClient)
