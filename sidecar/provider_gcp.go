@@ -169,36 +169,28 @@ func (gpc *GCPProviderConfig) newKey(client *vault.Client) (time.Duration, error
 	// Get a credentials secret from vault for the static account
 	secret, err := client.Logical().Read(gpc.Path + "/static-account/" + gpc.StaticAccount + "/key")
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("unable to to get new google service account key err:%w", err)
 	}
 
 	// Extract privete key data from the secret returned by Vault
 	privateKey := secret.Data["private_key_data"]
 	privateKeyDecoded, err := base64.StdEncoding.DecodeString(privateKey.(string))
 	if err != nil {
-		log.Error(err, "Error decoding private key")
+		return -1, fmt.Errorf("unable to decode private key err:%w", err)
 	}
 
 	// Save the service account json key in a file
 	err = os.WriteFile(gpc.KeyFileDestinationPath, []byte(privateKeyDecoded), 0600)
 	if err != nil {
-		log.Error(err, "Error saving google service account key file")
+		return -1, fmt.Errorf("unable to save google service account key file err:%w", err)
 	}
 
 	gpc.leaseDuration = time.Duration(secret.LeaseDuration) * time.Second
 	gpc.leaseExpiresAt = time.Now().Add(gpc.leaseDuration)
 	gpc.leaseID = secret.LeaseID
 
-	var keyData map[string]interface{}
-	err = json.Unmarshal(privateKeyDecoded, &keyData)
-	if err != nil {
-		return -1, err
-	}
-
 	log.Info("new gcp credentials",
 		"lease_expiration", gpc.leaseExpiresAt.Format("2006-01-02 15:04:05"),
-		"project", keyData["project_id"],
-		"service_account_email", keyData["client_email"],
 	)
 	return gpc.leaseDuration, nil
 }
