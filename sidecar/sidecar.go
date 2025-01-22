@@ -3,6 +3,7 @@ package sidecar
 import (
 	"context"
 	"crypto/tls"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -176,6 +177,7 @@ func (s *Sidecar) renew(ctx context.Context) (time.Duration, error) {
 func (s *Sidecar) reloadVaultCA() error {
 	var envCACert string
 	var envCAPath string
+	var envCACertBytes []byte
 
 	if v := os.Getenv(vault.EnvVaultCACert); v != "" {
 		envCACert = v
@@ -185,11 +187,26 @@ func (s *Sidecar) reloadVaultCA() error {
 		envCAPath = v
 	}
 
-	if envCACert != "" || envCAPath != "" {
+	if v := os.Getenv("VAULT_CAURL"); v != "" {
+		resp, err := http.Get(v)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		envCACertBytes, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+	}
+
+	if envCACert != "" || envCAPath != "" || len(envCACertBytes) != 0 {
 		err := rootcerts.ConfigureTLS(s.vaultTLSConfig, &rootcerts.Config{
-			CAPath: envCAPath,
-			CAFile: envCACert,
+			CAPath:        envCAPath,
+			CAFile:        envCACert,
+			CACertificate: envCACertBytes,
 		})
+
 		if err != nil {
 			return err
 		}
