@@ -215,3 +215,15 @@ instances.
 
 If the refresh fails then the sidecar will continue to make attempts at renewal,
 with an exponential backoff.
+
+### CA Reload
+Both `operator` and `sidecar` support hot reload of vault CA cert for secure communication.
+CA is updated before making vault API Calls. Following envs are supported.
+
+* `VAULT_CACERT`: value should be path to a PEM-encoded certificate file or bundle.
+  Takes precedence over CACertificate and CAPath.
+  
+* `VAULT_CAPATH`: value should be path to a directory populated with PEM-encoded certificates.
+
+* `VAULT_CAURL`: value should be URL which returns a PEM-encoded certificate or bundle as body.
+   Takes precedence over CAPath.
