@@ -1,4 +1,4 @@
-FROM golang:1.23-alpine AS build
+FROM golang:1.24-alpine AS build
 
 WORKDIR /go/src/github.com/utilitywarehouse/vault-kube-cloud-credentials
 COPY . /go/src/github.com/utilitywarehouse/vault-kube-cloud-credentials
@@ -9,7 +9,7 @@ RUN apk --no-cache add git \
       && go test ./... \
       && go build -o /vault-kube-cloud-credentials .
 
-FROM alpine:3.17
+FROM alpine:3.21
 COPY --from=build /vault-kube-cloud-credentials /vault-kube-cloud-credentials
 
 # ref: https://github.com/kubernetes/git-sync/blob/master/Dockerfile.in#L68
