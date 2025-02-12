@@ -27,11 +27,6 @@ func (s *Sidecar) manageLoginToken(ctx context.Context, loggedIn chan bool) {
 		for {
 			newSec, err := s.renewLoginToken(ctx, secret, expiresAt)
 			if err != nil {
-				if firstRun {
-					log.Error(err, "error renewing login token")
-					os.Exit(1)
-				}
-
 				promErrors.Inc()
 				d := backoff.Duration()
 				log.Error(err, "error renewing login token", "backoff", d)
