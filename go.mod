@@ -2,7 +2,7 @@ module github.com/utilitywarehouse/vault-kube-cloud-credentials
 
 go 1.23.0
 
-toolchain go1.23.4
+toolchain go1.24.1
 
 require (
 	github.com/aws/aws-sdk-go v1.55.6
@@ -14,8 +14,8 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/utilitywarehouse/go-operational v0.0.0-20250206100814-e7d65e48b364
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.32.2
-	k8s.io/apimachinery v0.32.2
+	k8s.io/api v0.32.3
+	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.2
 	sigs.k8s.io/controller-runtime v0.20.2
 )
