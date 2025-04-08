@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -74,18 +73,12 @@ func (apc *AWSProviderConfig) renew(ctx context.Context, client *vault.Client) (
 
 	// Get the expiration date of the lease from vault
 	l := lease{}
-	req := client.NewRequest("PUT", "/v1/sys/leases/lookup")
-	if err = req.SetJSONBody(map[string]interface{}{
-		"lease_id": secret.LeaseID,
-	}); err != nil {
-		return -1, err
-	}
-	resp, err := client.RawRequest(req)
+	resp, err := client.Logical().WriteRawWithContext(ctx, "sys/leases/lookup", []byte(`{"lease_id":"`+secret.LeaseID+`"}`))
 	if err != nil {
 		return -1, err
 	}
 	err = json.NewDecoder(resp.Body).Decode(&l)
-	io.Copy(ioutil.Discard, resp.Body)
+	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return -1, err
