@@ -1,6 +1,7 @@
 package sidecar
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -52,7 +53,7 @@ type AWSProviderConfig struct {
 
 // renew retrieves credentials from vault for the secret indicated in
 // the configuration
-func (apc *AWSProviderConfig) renew(client *vault.Client) (time.Duration, error) {
+func (apc *AWSProviderConfig) renew(ctx context.Context, client *vault.Client) (time.Duration, error) {
 	// Get a credentials secret from vault for the role
 	var secretData map[string][]string
 	if apc.RoleArn != "" {
@@ -60,7 +61,7 @@ func (apc *AWSProviderConfig) renew(client *vault.Client) (time.Duration, error)
 			"role_arn": []string{apc.RoleArn},
 		}
 	}
-	secret, err := client.Logical().ReadWithData(apc.Path+"/sts/"+apc.Role, secretData)
+	secret, err := client.Logical().ReadWithDataWithContext(ctx, apc.Path+"/sts/"+apc.Role, secretData)
 	if err != nil {
 		return -1, err
 	}
