@@ -1,10 +1,10 @@
 package sidecar
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -52,7 +52,7 @@ type AWSProviderConfig struct {
 
 // renew retrieves credentials from vault for the secret indicated in
 // the configuration
-func (apc *AWSProviderConfig) renew(client *vault.Client) (time.Duration, error) {
+func (apc *AWSProviderConfig) renew(ctx context.Context, client *vault.Client) (time.Duration, error) {
 	// Get a credentials secret from vault for the role
 	var secretData map[string][]string
 	if apc.RoleArn != "" {
@@ -60,7 +60,7 @@ func (apc *AWSProviderConfig) renew(client *vault.Client) (time.Duration, error)
 			"role_arn": []string{apc.RoleArn},
 		}
 	}
-	secret, err := client.Logical().ReadWithData(apc.Path+"/sts/"+apc.Role, secretData)
+	secret, err := client.Logical().ReadWithDataWithContext(ctx, apc.Path+"/sts/"+apc.Role, secretData)
 	if err != nil {
 		return -1, err
 	}
@@ -73,18 +73,12 @@ func (apc *AWSProviderConfig) renew(client *vault.Client) (time.Duration, error)
 
 	// Get the expiration date of the lease from vault
 	l := lease{}
-	req := client.NewRequest("PUT", "/v1/sys/leases/lookup")
-	if err = req.SetJSONBody(map[string]interface{}{
-		"lease_id": secret.LeaseID,
-	}); err != nil {
-		return -1, err
-	}
-	resp, err := client.RawRequest(req)
+	resp, err := client.Logical().WriteRawWithContext(ctx, "sys/leases/lookup", []byte(`{"lease_id":"`+secret.LeaseID+`"}`))
 	if err != nil {
 		return -1, err
 	}
 	err = json.NewDecoder(resp.Body).Decode(&l)
-	io.Copy(ioutil.Discard, resp.Body)
+	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return -1, err

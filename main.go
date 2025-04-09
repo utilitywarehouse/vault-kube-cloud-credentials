@@ -49,6 +49,7 @@ Commands:
 }
 
 func main() {
+	ctx := ctrl.SetupSignalHandler()
 	flag.Usage = usage
 
 	if len(os.Args) < 2 {
@@ -84,7 +85,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := o.Start(); err != nil {
+		if err := o.Start(ctx); err != nil {
 			log.Error(err, "error running operator")
 			os.Exit(1)
 		}
@@ -154,7 +155,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := s.Run(); err != nil {
+		if err := s.Run(ctx); err != nil {
 			log.Error(err, "error running sidecar")
 			os.Exit(1)
 		}

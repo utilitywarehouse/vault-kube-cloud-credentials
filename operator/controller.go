@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"context"
 	"fmt"
 
 	vault "github.com/hashicorp/vault/api"
@@ -102,6 +103,6 @@ func New(configFile, provider string) (*Controller, error) {
 }
 
 // Start runs the operator
-func (o *Controller) Start() error {
-	return o.mgr.Start(ctrl.SetupSignalHandler())
+func (o *Controller) Start(ctx context.Context) error {
+	return o.mgr.Start(ctx)
 }

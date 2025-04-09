@@ -1,6 +1,7 @@
 package sidecar
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -88,20 +89,20 @@ type GCPProviderConfig struct {
 
 // renew retrieves credentials from vault for the secret indicated in
 // the configuration
-func (gpc *GCPProviderConfig) renew(client *vault.Client) (time.Duration, error) {
+func (gpc *GCPProviderConfig) renew(ctx context.Context, client *vault.Client) (time.Duration, error) {
 	switch gpc.SecretType {
 	case "access_token":
-		return gpc.renewToken(client)
+		return gpc.renewToken(ctx, client)
 	case "service_account_key":
-		return gpc.renewKey(client)
+		return gpc.renewKey(ctx, client)
 	default:
 		return -1, fmt.Errorf("wrong secret type")
 	}
 }
 
-func (gpc *GCPProviderConfig) renewToken(client *vault.Client) (time.Duration, error) {
+func (gpc *GCPProviderConfig) renewToken(ctx context.Context, client *vault.Client) (time.Duration, error) {
 	// Get a credentials secret from vault for the static account
-	secret, err := client.Logical().Read(gpc.Path + "/static-account/" + gpc.StaticAccount + "/token")
+	secret, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/static-account/"+gpc.StaticAccount+"/token")
 	if err != nil {
 		return -1, err
 	}
@@ -119,7 +120,7 @@ func (gpc *GCPProviderConfig) renewToken(client *vault.Client) (time.Duration, e
 		return -1, err
 	}
 
-	if err := gpc.updateMetadata(client); err != nil {
+	if err := gpc.updateMetadata(ctx, client); err != nil {
 		return -1, err
 	}
 
@@ -145,12 +146,12 @@ func (gpc *GCPProviderConfig) renewToken(client *vault.Client) (time.Duration, e
 // so instead of requesting new key when old key lease is expired we will keep
 // renewing lease. so that only 1 key will be used for the lifecycle of the pod
 // this also helps with the application which do not re-read keys.
-func (gpc *GCPProviderConfig) renewKey(client *vault.Client) (time.Duration, error) {
+func (gpc *GCPProviderConfig) renewKey(ctx context.Context, client *vault.Client) (time.Duration, error) {
 	if gpc.leaseID == "" || time.Since(gpc.leaseExpiresAt) > 0 {
-		return gpc.newKey(client)
+		return gpc.newKey(ctx, client)
 	}
 
-	secret, err := client.Sys().Renew(gpc.leaseID, int(gpc.leaseDuration.Seconds()))
+	secret, err := client.Sys().RenewWithContext(ctx, gpc.leaseID, int(gpc.leaseDuration.Seconds()))
 	if err != nil {
 		return -1, fmt.Errorf("unable to renew key lease err:%w", err)
 	}
@@ -165,9 +166,9 @@ func (gpc *GCPProviderConfig) renewKey(client *vault.Client) (time.Duration, err
 	return gpc.leaseDuration, nil
 }
 
-func (gpc *GCPProviderConfig) newKey(client *vault.Client) (time.Duration, error) {
+func (gpc *GCPProviderConfig) newKey(ctx context.Context, client *vault.Client) (time.Duration, error) {
 	// Get a credentials secret from vault for the static account
-	secret, err := client.Logical().Read(gpc.Path + "/static-account/" + gpc.StaticAccount + "/key")
+	secret, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/static-account/"+gpc.StaticAccount+"/key")
 	if err != nil {
 		return -1, fmt.Errorf("unable to to get new google service account key err:%w", err)
 	}
@@ -196,8 +197,8 @@ func (gpc *GCPProviderConfig) newKey(client *vault.Client) (time.Duration, error
 }
 
 // updateMetadata extracts metadata from the roleset in vault
-func (gpc *GCPProviderConfig) updateMetadata(client *vault.Client) error {
-	sa, err := client.Logical().Read(gpc.Path + "/static-account/" + gpc.StaticAccount)
+func (gpc *GCPProviderConfig) updateMetadata(ctx context.Context, client *vault.Client) error {
+	sa, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/static-account/"+gpc.StaticAccount)
 	if err != nil {
 		return err
 	}

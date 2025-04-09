@@ -74,10 +74,7 @@ func New(config *Config) (*Sidecar, error) {
 
 // Run starts the sidecar. It retrieves credentials from vault and serves them
 // for the configured cloud provider
-func (s *Sidecar) Run() error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+func (s *Sidecar) Run(ctx context.Context) error {
 	loggedIn := make(chan bool, 1)
 
 	go s.manageLoginToken(ctx, loggedIn)
@@ -118,15 +115,30 @@ func (s *Sidecar) Run() error {
 	errors := make(chan error)
 
 	// Serve operational endpoints
+	opsSrv := &http.Server{
+		Addr:         s.OpsAddress,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  5 * time.Second,
+	}
 	sr := mux.NewRouter()
 	sr.PathPrefix("/__/").Handler(statusHandler)
+	opsSrv.Handler = sr
 
 	go func() {
 		log.Info("operational status server is listening", "address", s.OpsAddress)
-		errors <- http.ListenAndServe(s.OpsAddress, sr)
+		if err := opsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errors <- err
+		}
 	}()
 
 	// Serve provider endpoints
+	providerSrv := &http.Server{
+		Addr:         s.ListenAddress,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  5 * time.Second,
+	}
 	r := mux.NewRouter()
 	s.ProviderConfig.setupEndpoints(r)
 
@@ -142,18 +154,37 @@ func (s *Sidecar) Run() error {
 			),
 		),
 	)
+	providerSrv.Handler = ir
 
 	go func() {
 		// Block until the provider has retrieved the first set of
 		// credentials
 		<-ready
 		log.Info("webserver is listening", "address", s.ListenAddress)
-		errors <- http.ListenAndServe(s.ListenAddress, ir)
+		if err := providerSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errors <- err
+		}
 	}()
 
-	err := <-errors
+	select {
+	case err := <-errors:
+		return err
+	case <-ctx.Done():
+		log.Info("shutting down ...")
 
-	return err
+		ctxWto1, cancelWto1 := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancelWto1()
+		if err := providerSrv.Shutdown(ctxWto1); err != nil {
+			return err
+		}
+
+		ctxWto2, cancelWto2 := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancelWto2()
+		if err := opsSrv.Shutdown(ctxWto2); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // renew the credentials
@@ -164,7 +195,7 @@ func (s *Sidecar) renew(ctx context.Context) (time.Duration, error) {
 	}
 
 	// Renew credentials for the provider
-	return s.ProviderConfig.renew(s.vaultClient)
+	return s.ProviderConfig.renew(ctx, s.vaultClient)
 }
 
 // reloadVaultCA updates the tls.Config used by the vault client with the CA

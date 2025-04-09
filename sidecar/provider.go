@@ -1,6 +1,7 @@
 package sidecar
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 // ProviderConfig provides generic methods for retrieving and serving
 // credentials from vault for a cloud provider
 type ProviderConfig interface {
-	renew(client *vault.Client) (time.Duration, error)
+	renew(ctx context.Context, client *vault.Client) (time.Duration, error)
 	setupEndpoints(r *mux.Router)
 }
 
