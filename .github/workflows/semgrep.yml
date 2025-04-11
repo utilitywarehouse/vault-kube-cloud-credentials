@@ -1,0 +1,34 @@
+name: Semgrep
+
+on:
+  # Scan changed files in PRs (diff-aware scanning):
+  pull_request: {}
+  # Scan on-demand through GitHub Actions interface:
+  workflow_dispatch: {}
+  # Scan mainline branches and report all findings:
+  push:
+    branches:
+        - main
+        - master
+  # Schedule the CI job (this method uses cron syntax):
+  schedule:
+    - cron: '30 14 * * *'
+    # or whatever time works best for your team.
+
+jobs:
+  semgrep:
+    # User definable name of this GitHub Actions job.
+    name: semgrep/ci
+    # If you are self-hosting, change the following `runs-on` value:
+    runs-on: ubuntu-latest
+
+    # Skip any PR created by dependabot to avoid permission issues:
+    if: (github.actor != 'dependabot[bot]')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Semgrep
+        uses: utilitywarehouse/semgrep-rules/setup-semgrep@latest
+        with:
+          token: ${{ secrets.DEPLOY_GITHUB_TOKEN }}
