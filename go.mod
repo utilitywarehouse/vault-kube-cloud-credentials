@@ -1,7 +1,6 @@
 module github.com/utilitywarehouse/vault-kube-cloud-credentials
 
 go 1.24
-
 toolchain go1.24.1
 
 require (
@@ -14,8 +13,8 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/utilitywarehouse/go-operational v0.0.0-20250206100814-e7d65e48b364
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.32.3
-	k8s.io/apimachinery v0.32.3
+	k8s.io/api v0.33.0
+	k8s.io/apimachinery v0.33.0
 	k8s.io/client-go v0.32.3
 	sigs.k8s.io/controller-runtime v0.20.4
 )
@@ -40,7 +39,6 @@ require (
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
