@@ -1,4 +1,4 @@
-# See GitHub's docs for more information on this file:
+# SeeGitHub's docs for more information on this file:
 # https://docs.github.com/en/free-pro-team@latest/github/administering-a-repository/configuration-options-for-dependency-updates
 version: 2
 updates:
@@ -7,9 +7,7 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-
-  # Maintain dependencies for Go modules
-  - package-ecosystem: "gomod"
-    directory: "/"
-    schedule:
-      interval: "monthly"
+    groups:
+      all:
+        patterns:
+          - "*"
