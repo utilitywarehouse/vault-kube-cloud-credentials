@@ -205,13 +205,24 @@ func (gpc *GCPProviderConfig) newKey(ctx context.Context, client *vault.Client) 
 // yet. The suffix is appended to the account path (e.g. "/token" or "").
 func (gpc *GCPProviderConfig) readAccountSecret(ctx context.Context, client *vault.Client, suffix string) (*vault.Secret, error) {
 	for _, prefix := range []string{"impersonated-account", "static-account"} {
-		secret, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/"+prefix+"/"+gpc.StaticAccount+suffix)
+		// Probe the account path without the suffix first: vault returns 404
+		// for a missing account here, which vault/api maps to (nil, nil), so
+		// we can reliably detect which path hosts the account and fall back
+		// to the next prefix when it does not. Reading the suffixed path
+		// directly would not work for that purpose because vault returns a
+		// 400 (not 404) for a missing account on the token path, which
+		// vault/api surfaces as an error and aborts the fallback.
+		account, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/"+prefix+"/"+gpc.StaticAccount)
 		if err != nil {
 			return nil, err
 		}
-		if secret != nil {
-			return secret, nil
+		if account == nil {
+			continue
 		}
+		if suffix == "" {
+			return account, nil
+		}
+		return client.Logical().ReadWithContext(ctx, gpc.Path+"/"+prefix+"/"+gpc.StaticAccount+suffix)
 	}
 	return nil, fmt.Errorf("gcp account %q does not exist in vault", gpc.StaticAccount)
 }
