@@ -107,3 +107,45 @@ func TestReadAccountSecretMetadataUsesCorrectPrefix(t *testing.T) {
 		t.Errorf("service_account_email = %v, want imp@test.iam.gserviceaccount.com", got)
 	}
 }
+
+// vaultHandlerDeletedToken serves a probe that succeeds (account present) but
+// a token read that 404s, mimicking the account being removed between the two
+// reads. readAccountSecret must fall through to the static account rather than
+// return a nil secret.
+func vaultHandlerDeletedToken(t *testing.T) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/gcp/impersonated-account/test":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{"data":{"service_account_email":"imp@test.iam.gserviceaccount.com","service_account_project":"test","token_scopes":["https://www.googleapis.com/auth/cloud-platform"],"ttl":3600}}`)
+		case "/v1/gcp/impersonated-account/test/token":
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"errors":[]}`)
+		case "/v1/gcp/static-account/test":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{"data":{"service_account_email":"static@test.iam.gserviceaccount.com","service_account_project":"test","token_scopes":["https://www.googleapis.com/auth/cloud-platform"]}}`)
+		case "/v1/gcp/static-account/test/token":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{"data":{"token":"static-token","token_ttl":3600,"expires_at_seconds":0}}`)
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}
+}
+
+func TestReadAccountSecretFallsBackWhenTokenReadGoesNil(t *testing.T) {
+	ts := httptest.NewServer(vaultHandlerDeletedToken(t))
+	defer ts.Close()
+	client := newVaultClient(t, ts)
+
+	gpc := &GCPProviderConfig{Path: "gcp", StaticAccount: "test"}
+
+	secret, err := gpc.readAccountSecret(context.Background(), client, "/token")
+	if err != nil {
+		t.Fatalf("readAccountSecret: %v", err)
+	}
+	if got := secret.Data["token"]; got != "static-token" {
+		t.Errorf("token = %v, want static-token", got)
+	}
+}

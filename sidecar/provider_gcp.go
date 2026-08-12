@@ -222,7 +222,16 @@ func (gpc *GCPProviderConfig) readAccountSecret(ctx context.Context, client *vau
 		if suffix == "" {
 			return account, nil
 		}
-		return client.Logical().ReadWithContext(ctx, gpc.Path+"/"+prefix+"/"+gpc.StaticAccount+suffix)
+		// The account was present a moment ago, but it may have been removed
+		// between the probe and this read; a 404 there maps to (nil, nil), so
+		// guard against it rather than returning a nil secret to the caller.
+		secret, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/"+prefix+"/"+gpc.StaticAccount+suffix)
+		if err != nil {
+			return nil, err
+		}
+		if secret != nil {
+			return secret, nil
+		}
 	}
 	return nil, fmt.Errorf("gcp account %q does not exist in vault", gpc.StaticAccount)
 }
