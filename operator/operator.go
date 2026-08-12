@@ -32,6 +32,8 @@ type provider interface {
 	renderPolicyTemplate(name string) (string, error)
 	secretIdentityAnnotation() string
 	secretPath() string
+	secretPaths() []string
+	secretWritePath(data map[string]interface{}) string
 	secretTTL(serviceAccount *corev1.ServiceAccount) (time.Duration, error)
 	secretPayload(serviceAccount *corev1.ServiceAccount) (map[string]interface{}, error)
 }
@@ -52,16 +54,18 @@ func NewOperator(config *Config, provider provider) (*Operator, error) {
 func (o *Operator) Start(ctx context.Context) error {
 	o.log.Info("garbage collection started")
 
-	// AWS secret roles or GCP static accounts
-	secretList, err := o.VaultClient.Logical().List(o.provider.secretPath())
-	if err != nil {
-		return err
-	}
-	if secretList != nil {
-		if keys, ok := secretList.Data["keys"].([]interface{}); ok {
-			err = o.garbageCollect(keys)
-			if err != nil {
-				return err
+	// AWS secret roles, GCP static accounts or GCP impersonated accounts
+	for _, path := range o.provider.secretPaths() {
+		secretList, err := o.VaultClient.Logical().List(path)
+		if err != nil {
+			return err
+		}
+		if secretList != nil {
+			if keys, ok := secretList.Data["keys"].([]interface{}); ok {
+				err = o.garbageCollect(keys)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -254,8 +258,9 @@ func (o *Operator) writeToVault(namespace, serviceAccount string, data map[strin
 	}
 	o.log.Info("Wrote kubernetes auth backend role", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
-	// Create AWS secret backend role or GCP static account
-	if _, err := o.VaultClient.Logical().Write(o.provider.secretPath()+n, data); err != nil {
+	// Create AWS secret backend role or GCP static account or impersonated
+	// account
+	if _, err := o.VaultClient.Logical().Write(o.provider.secretWritePath(data)+n, data); err != nil {
 		return err
 	}
 	o.log.Info("Wrote secret identity to vault", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
@@ -267,20 +272,22 @@ func (o *Operator) writeToVault(namespace, serviceAccount string, data map[strin
 func (o *Operator) removeFromVault(namespace, serviceAccount string) error {
 	n := o.name(namespace, serviceAccount)
 
-	_, err := o.VaultClient.Logical().Delete(o.provider.secretPath() + n)
-	if err != nil {
-		return err
+	// Delete all secret identity types (e.g. both static-account and
+	// impersonated-account for GCP) so removal covers legacy and migrated
+	// accounts
+	for _, path := range o.provider.secretPaths() {
+		if _, err := o.VaultClient.Logical().Delete(path + n); err != nil {
+			return err
+		}
 	}
 	o.log.Info("Deleted secret identity from vault", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
-	_, err = o.VaultClient.Logical().Delete("auth/" + o.KubernetesAuthBackend + "/role/" + n)
-	if err != nil {
+	if _, err := o.VaultClient.Logical().Delete("auth/" + o.KubernetesAuthBackend + "/role/" + n); err != nil {
 		return err
 	}
 	o.log.Info("Deleted Kubernetes auth role", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)
 
-	_, err = o.VaultClient.Logical().Delete("sys/policy/" + n)
-	if err != nil {
+	if _, err := o.VaultClient.Logical().Delete("sys/policy/" + n); err != nil {
 		return err
 	}
 	o.log.Info("Deleted policy", "namespace", namespace, "serviceaccount", serviceAccount, "key", n)

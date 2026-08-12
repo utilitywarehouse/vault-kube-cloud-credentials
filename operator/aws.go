@@ -78,6 +78,16 @@ func (a *AWS) secretPath() string {
 	return a.Path + "/roles/"
 }
 
+// secretPaths returns all vault secret paths managed by the operator
+func (a *AWS) secretPaths() []string {
+	return []string{a.secretPath()}
+}
+
+// secretWritePath returns the vault path to write a secret payload to
+func (a *AWS) secretWritePath(data map[string]interface{}) string {
+	return a.secretPath()
+}
+
 func (a *AWS) processUpdateEvent(e event.UpdateEvent) bool {
 	return e.ObjectOld.GetAnnotations()[awsRoleAnnotation] != e.ObjectNew.GetAnnotations()[awsRoleAnnotation] ||
 		e.ObjectOld.GetAnnotations()[defaultSTSTTLAnnotation] != e.ObjectNew.GetAnnotations()[defaultSTSTTLAnnotation]

@@ -56,6 +56,10 @@ type gcpFileConfig struct {
 	Path string `yaml:"path"`
 	// Rules that govern which service accounts can assume which roles
 	Rules GCPRules `yaml:"rules"`
+	// Impersonated switches GCP access-token accounts from static-account
+	// (each create generates a GCP key) to impersonated-account (no key),
+	// avoiding the 10-key-per-service-account limit.
+	Impersonated bool `yaml:"impersonated"`
 }
 
 func loadConfigFromFile(file string) (*fileConfig, error) {
