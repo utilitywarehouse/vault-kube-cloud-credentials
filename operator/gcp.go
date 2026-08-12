@@ -28,8 +28,14 @@ path "{{ .Path }}/static-account/{{ .Name }}/token" {
 path "{{ .Path }}/static-account/{{ .Name }}/key" {
   capabilities = ["create", "read", "update", "delete", "list"]
 }
+path "{{ .Path }}/impersonated-account/{{ .Name }}" {
+  capabilities = ["read"]
+}
+path "{{ .Path }}/impersonated-account/{{ .Name }}/token" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
 path "{{ .Path }}/token/{{ .Name }}" {
-capabilities = ["create", "read", "update", "delete", "list"]
+  capabilities = ["create", "read", "update", "delete", "list"]
 }
 path "{{ .Path }}/key/{{ .Name }}" {
   capabilities = ["create", "read", "update", "delete", "list"]
@@ -48,10 +54,11 @@ type GCPRule struct {
 
 // GCPOperatorConfig provides configuration when creating a new Operator
 type GCP struct {
-	DefaultTTL time.Duration
-	Path       string
-	Rules      GCPRules
-	tmpl       *template.Template
+	DefaultTTL   time.Duration
+	Path         string
+	Rules        GCPRules
+	Impersonated bool
+	tmpl         *template.Template
 }
 
 // NewGCPProvider returns a configured GCP provider config
@@ -64,9 +71,10 @@ func NewGCPProvider(config gcpFileConfig) (*GCP, error) {
 	return &GCP{
 		tmpl: tmpl,
 
-		DefaultTTL: config.DefaultTTL,
-		Path:       config.Path,
-		Rules:      config.Rules,
+		DefaultTTL:   config.DefaultTTL,
+		Path:         config.Path,
+		Rules:        config.Rules,
+		Impersonated: config.Impersonated,
 	}, nil
 }
 
@@ -81,6 +89,21 @@ func (g *GCP) secretIdentityAnnotation() string {
 
 func (g *GCP) secretPath() string {
 	return g.Path + "/static-account/"
+}
+
+// impersonatedSecretPath is the vault path where GCP access-token accounts
+// are stored when impersonation is enabled. Impersonated accounts generate
+// tokens via signJwt/impersonation and do not create a GCP service account
+// key, avoiding the 10-key-per-service-account limit.
+func (g *GCP) impersonatedSecretPath() string {
+	return g.Path + "/impersonated-account/"
+}
+
+// secretPaths returns all vault secret paths managed by the operator. GCP
+// manages both impersonated accounts and legacy static accounts so that
+// garbage collection and removal cover accounts of either type.
+func (g *GCP) secretPaths() []string {
+	return []string{g.impersonatedSecretPath(), g.secretPath()}
 }
 
 func (g *GCP) processUpdateEvent(e event.UpdateEvent) bool {
@@ -113,12 +136,36 @@ func (g *GCP) secretPayload(serviceAccount *corev1.ServiceAccount) (map[string]i
 			"secret_type":           "service_account_key",
 		}, nil
 	default:
+		if g.Impersonated {
+			secretTTL, err := g.secretTTL(serviceAccount)
+			if err != nil {
+				return nil, err
+			}
+			// Impersonated accounts generate tokens via signJwt and never
+			// create a GCP service account key, so they are not subject to
+			// the 10-key-per-service-account limit.
+			return map[string]interface{}{
+				"service_account_email": serviceAccount.Annotations[gcpServiceAccountAnnotation],
+				"token_scopes":          tokenScopes,
+				"ttl":                   int(secretTTL.Seconds()),
+			}, nil
+		}
 		return map[string]interface{}{
 			"service_account_email": serviceAccount.Annotations[gcpServiceAccountAnnotation],
 			"secret_type":           "access_token",
 			"token_scopes":          tokenScopes,
 		}, nil
 	}
+}
+
+// secretWritePath returns the vault path to write a secret payload to.
+// Access-token payloads go to the impersonated-account path (no secret_type);
+// service account key payloads stay on the legacy static-account path.
+func (g *GCP) secretWritePath(data map[string]interface{}) string {
+	if _, ok := data["secret_type"]; ok {
+		return g.secretPath()
+	}
+	return g.impersonatedSecretPath()
 }
 
 // renderGCPPolicyTemplate injects the provided name into a policy allowing access

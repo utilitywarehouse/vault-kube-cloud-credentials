@@ -101,8 +101,10 @@ func (gpc *GCPProviderConfig) renew(ctx context.Context, client *vault.Client) (
 }
 
 func (gpc *GCPProviderConfig) renewToken(ctx context.Context, client *vault.Client) (time.Duration, error) {
-	// Get a credentials secret from vault for the static account
-	secret, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/static-account/"+gpc.StaticAccount+"/token")
+	// Get a credentials secret from vault for the account. Impersonated
+	// accounts are preferred (no GCP key is created); legacy static accounts
+	// are used as a fallback for clusters that have not migrated yet.
+	secret, err := gpc.readAccountSecret(ctx, client, "/token")
 	if err != nil {
 		return -1, err
 	}
@@ -196,9 +198,47 @@ func (gpc *GCPProviderConfig) newKey(ctx context.Context, client *vault.Client) 
 	return gpc.leaseDuration, nil
 }
 
-// updateMetadata extracts metadata from the roleset in vault
+// readAccountSecret reads a secret from vault for the configured account,
+// preferring the impersonated-account path over the legacy static-account
+// path. Impersonated accounts generate tokens without creating a GCP key;
+// static accounts are used as a fallback for clusters that have not migrated
+// yet. The suffix is appended to the account path (e.g. "/token" or "").
+func (gpc *GCPProviderConfig) readAccountSecret(ctx context.Context, client *vault.Client, suffix string) (*vault.Secret, error) {
+	for _, prefix := range []string{"impersonated-account", "static-account"} {
+		// Probe the account path without the suffix first: vault returns 404
+		// for a missing account here, which vault/api maps to (nil, nil), so
+		// we can reliably detect which path hosts the account and fall back
+		// to the next prefix when it does not. Reading the suffixed path
+		// directly would not work for that purpose because vault returns a
+		// 400 (not 404) for a missing account on the token path, which
+		// vault/api surfaces as an error and aborts the fallback.
+		account, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/"+prefix+"/"+gpc.StaticAccount)
+		if err != nil {
+			return nil, err
+		}
+		if account == nil {
+			continue
+		}
+		if suffix == "" {
+			return account, nil
+		}
+		// The account was present a moment ago, but it may have been removed
+		// between the probe and this read; a 404 there maps to (nil, nil), so
+		// guard against it rather than returning a nil secret to the caller.
+		secret, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/"+prefix+"/"+gpc.StaticAccount+suffix)
+		if err != nil {
+			return nil, err
+		}
+		if secret != nil {
+			return secret, nil
+		}
+	}
+	return nil, fmt.Errorf("gcp account %q does not exist in vault", gpc.StaticAccount)
+}
+
+// updateMetadata extracts metadata from the account in vault
 func (gpc *GCPProviderConfig) updateMetadata(ctx context.Context, client *vault.Client) error {
-	sa, err := client.Logical().ReadWithContext(ctx, gpc.Path+"/static-account/"+gpc.StaticAccount)
+	sa, err := gpc.readAccountSecret(ctx, client, "")
 	if err != nil {
 		return err
 	}
