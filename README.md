@@ -27,6 +27,10 @@ Cloud providers supported:
 - AWS
 - GCP
 
+The sidecar also supports a **github** provider. It fetches a token from
+`vault-plugin-secrets-github` for a configured permission set and writes it to
+a file (path from `GITHUB_TOKEN_FILE`, default `/var/run/secrets/github/token`).
+
 ## Operator
 
 ### Requirements
@@ -181,6 +185,7 @@ Supported providers (secret engines):
 
 - `aws`
 - `gcp`
+- `github`
 
 ```
 # AWS
@@ -190,6 +195,10 @@ Supported providers (secret engines):
 ./vault-kube-cloud-credentials sidecar \
     -vault-static-account=<prefix>_<provider>_<namespace>_<serviceaccount> \
     -secret-type=access_token
+# GitHub
+./vault-kube-cloud-credentials sidecar \
+    -vault-role=<prefix>_github_<namespace>_<serviceaccount> \
+    -github-permission-set=<permission-set>
 ```
 
 Refer to the usage for more options:
@@ -217,13 +226,14 @@ If the refresh fails then the sidecar will continue to make attempts at renewal,
 with an exponential backoff.
 
 ### CA Reload
+
 Both `operator` and `sidecar` support hot reload of vault CA cert for secure communication.
 CA is updated before making vault API Calls. Following envs are supported.
 
-* `VAULT_CACERT`: value should be path to a PEM-encoded certificate file or bundle.
+- `VAULT_CACERT`: value should be path to a PEM-encoded certificate file or bundle.
   Takes precedence over CACertificate and CAPath.
-  
-* `VAULT_CAPATH`: value should be path to a directory populated with PEM-encoded certificates.
+- `VAULT_CAPATH`: value should be path to a directory populated with PEM-encoded certificates.
 
-* `VAULT_CAURL`: value should be URL which returns a PEM-encoded certificate or bundle as body.
-   Takes precedence over CAPath.
+- `VAULT_CAURL`: value should be URL which returns a PEM-encoded certificate or bundle as body.
+  Takes precedence over CAPath.
+
