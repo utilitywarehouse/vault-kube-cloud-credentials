@@ -17,13 +17,14 @@ var (
 	flagOperatorConfigFile = operatorCommand.String("config-file", "", "Path to a configuration file")
 	flagOperatorProvider   = operatorCommand.String("provider", "aws", "Cloud provider (one of 'aws' or 'gcp')")
 
-	sidecarCommand                = flag.NewFlagSet("sidecar", flag.ExitOnError)
-	flagSidecarKubeTokenPath      = sidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
-	flagSidecarListenAddr         = sidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
-	flagSidecarOpsAddr            = sidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
-	flagSidecarVaultRole          = sidecarCommand.String("vault-role", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
-	flagSidecarVaultStaticAccount = sidecarCommand.String("vault-static-account", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
-	flagSidecarSecretType         = sidecarCommand.String("secret-type", "access_token", "Secret type (one of 'service_account_key' or 'access_token')")
+	sidecarCommand                 = flag.NewFlagSet("sidecar", flag.ExitOnError)
+	flagSidecarKubeTokenPath       = sidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
+	flagSidecarListenAddr          = sidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
+	flagSidecarOpsAddr             = sidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
+	flagSidecarVaultRole           = sidecarCommand.String("vault-role", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
+	flagSidecarVaultStaticAccount  = sidecarCommand.String("vault-static-account", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
+	flagSidecarSecretType          = sidecarCommand.String("secret-type", "access_token", "Secret type (one of 'service_account_key' or 'access_token')")
+	flagSidecarGitHubPermissionSet = sidecarCommand.String("github-permission-set", "", "Name of the vault-plugin-secrets-github permission set to fetch a token for (github provider only)")
 
 	log = ctrl.Log.WithName("main")
 
@@ -112,6 +113,11 @@ func main() {
 			sidecarProvider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultRole)[2]
 		}
 
+		if sidecarProvider == "github" && *flagSidecarGitHubPermissionSet == "" {
+			log.Error(nil, "'github-permission-set' must be specified for the github provider.")
+			os.Exit(1)
+		}
+
 		var pc sidecar.ProviderConfig
 		var kubeAuthRole string
 		switch sidecarProvider {
@@ -135,6 +141,18 @@ func main() {
 				KeyFileDestinationPath: keyFilePath,
 			}
 			kubeAuthRole = *flagSidecarVaultStaticAccount
+		case "github":
+			tokenFilePath := os.Getenv("GITHUB_TOKEN_FILE")
+			if tokenFilePath == "" {
+				tokenFilePath = "/var/run/secrets/github/token"
+			}
+
+			pc = &sidecar.GitHubProviderConfig{
+				Path:                     "github",
+				PermissionSet:            *flagSidecarGitHubPermissionSet,
+				TokenFileDestinationPath: tokenFilePath,
+			}
+			kubeAuthRole = *flagSidecarVaultRole
 		default:
 			usage()
 			return
