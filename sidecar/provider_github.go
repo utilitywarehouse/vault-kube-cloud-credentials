@@ -20,31 +20,42 @@ type GitHubProviderConfig struct {
 	TokenFileDestinationPath string
 }
 
+// tokenPath is the vault path of the configured permission set's token.
+func (gh *GitHubProviderConfig) tokenPath() string {
+	return gh.Path + "/token/" + gh.PermissionSet
+}
+
 // renew retrieves a token from vault for the configured permission set and
 // writes it to TokenFileDestinationPath
 func (gh *GitHubProviderConfig) renew(ctx context.Context, client *vault.Client) (time.Duration, error) {
-	secret, err := client.Logical().ReadWithContext(ctx, gh.Path+"/token/"+gh.PermissionSet)
+	secret, err := client.Logical().ReadWithContext(ctx, gh.tokenPath())
 	if err != nil {
 		return -1, fmt.Errorf("unable to read github token: %w", err)
 	}
 	if secret == nil || secret.Data == nil {
-		return -1, fmt.Errorf("no data returned for %s/token/%s", gh.Path, gh.PermissionSet)
+		return -1, fmt.Errorf("no data returned for %s", gh.tokenPath())
 	}
 
 	token, ok := secret.Data["token"].(string)
 	if !ok {
-		return -1, fmt.Errorf("token is not a string")
+		return -1, fmt.Errorf("no string 'token' field returned for %s", gh.tokenPath())
 	}
 
-	if err := writeFileAtomically(gh.TokenFileDestinationPath, []byte(token), 0600); err != nil {
+	// The plugin sets the lease duration from the token's expires_at. Without a
+	// lease the sidecar would not sleep between renewals and would create a new
+	// installation token on every iteration.
+	leaseDuration := time.Duration(secret.LeaseDuration) * time.Second
+	if leaseDuration <= 0 {
+		return -1, fmt.Errorf("no lease duration returned for %s", gh.tokenPath())
+	}
+
+	if err := writeFileAtomically(gh.TokenFileDestinationPath, []byte(token)); err != nil {
 		return -1, fmt.Errorf("unable to save github token file: %w", err)
 	}
 
-	leaseDuration := time.Duration(secret.LeaseDuration) * time.Second
-
 	log.Info("new github token",
 		"permission_set", gh.PermissionSet,
-		"lease_duration", leaseDuration,
+		"expiration", time.Now().Add(leaseDuration).Format("2006-01-02 15:04:05"),
 	)
 
 	return leaseDuration, nil
@@ -58,8 +69,9 @@ func (gh *GitHubProviderConfig) setupEndpoints(r *mux.Router) {}
 
 // writeFileAtomically writes data to a temporary file in the same directory
 // as path and renames it into place, so a concurrent reader of path never
-// observes a partially-written token.
-func writeFileAtomically(path string, data []byte, perm os.FileMode) error {
+// observes a partially-written token. The destination is created with 0600
+// permissions, which the caller relies on for a secret.
+func writeFileAtomically(path string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-"+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
@@ -71,10 +83,11 @@ func writeFileAtomically(path string, data []byte, perm os.FileMode) error {
 		tmp.Close()
 		return err
 	}
-	if err := tmp.Close(); err != nil {
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
 		return err
 	}
-	if err := os.Chmod(tmpPath, perm); err != nil {
+	if err := tmp.Close(); err != nil {
 		return err
 	}
 	return os.Rename(tmpPath, path)

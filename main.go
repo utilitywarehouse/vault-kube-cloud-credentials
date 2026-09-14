@@ -106,16 +106,31 @@ func main() {
 			os.Exit(1)
 		}
 
-		if *flagSidecarVaultStaticAccount != "" {
-			sidecarProvider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultStaticAccount)[2]
-		}
-		if *flagSidecarVaultRole != "" {
-			sidecarProvider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultRole)[2]
+		account := *flagSidecarVaultRole
+		if account == "" {
+			account = *flagSidecarVaultStaticAccount
 		}
 
-		if sidecarProvider == "github" && *flagSidecarGitHubPermissionSet == "" {
-			log.Error(nil, "'github-permission-set' must be specified for the github provider.")
-			os.Exit(1)
+		if account != "" {
+			match := vaultRoleRegex.FindStringSubmatch(account)
+			if len(match) < 5 {
+				log.Error(nil, "'vault-role' or 'vault-static-account' must be in the format `<prefix>_<provider>_<namespace>_<service-account>`.")
+				os.Exit(1)
+			}
+			sidecarProvider = match[2]
+		}
+
+		if sidecarProvider == "github" {
+			// The kubernetes auth role is taken from vault-role in the github
+			// case below, so a static account would leave it empty.
+			if *flagSidecarVaultRole == "" {
+				log.Error(nil, "The github provider must be configured with 'vault-role'.")
+				os.Exit(1)
+			}
+			if *flagSidecarGitHubPermissionSet == "" {
+				log.Error(nil, "'github-permission-set' must be specified for the github provider.")
+				os.Exit(1)
+			}
 		}
 
 		var pc sidecar.ProviderConfig
