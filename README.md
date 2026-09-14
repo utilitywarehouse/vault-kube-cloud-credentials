@@ -214,6 +214,34 @@ applicably:
 - `VAULT_ADDR`: the address of the Vault server (default: `https://127.0.0.1:8200`)
 - `VAULT_CACERT`: path to a CA certificate file used to verify the Vault server's certificate
 
+### GitHub
+
+The `github` provider reads a token from `vault-plugin-secrets-github` and writes it to
+the file named by `GITHUB_TOKEN_FILE`, rather than serving an HTTP endpoint, because
+the tooling that consumes it expects a token value.
+
+**The pod must set `securityContext.fsGroup` for the workload to read the token file; any
+value works.**
+
+The operator creates no Vault objects for this provider, so the following have to be in
+place before the sidecar starts:
+
+- A Kubernetes auth role at
+  `auth/kubernetes/role/<prefix>_github_<namespace>_<serviceaccount>`, bound to that
+  namespace and service account, carrying the `github_<permission-set>` policy that
+  [sys-vault-repo-permission-sets](https://github.com/utilitywarehouse/terraform/tree/master/github/sys-vault-repo-permission-sets)
+  creates
+- A writable directory at the token path, normally an `emptyDir` mounted at
+  `/var/run/secrets/github`. The directory does not exist in the image, so the sidecar
+  cannot write the token without it. It has to be mounted into the workload container as
+  well
+- The workload re-reading the token file. Installation tokens expire after an hour, so a
+  workload that reads the token once at startup stops working after the first expiry
+
+One sidecar serves one permission set. A workload that needs two has to run a second
+sidecar with its own `GITHUB_TOKEN_FILE`, `-listen-address` and `-operational-address`,
+as containers in a pod share a network namespace.
+
 ### Renewal
 
 The sidecar will retrieve new credentials after 1/3 of the current TTL has
@@ -233,7 +261,6 @@ CA is updated before making vault API Calls. Following envs are supported.
 - `VAULT_CACERT`: value should be path to a PEM-encoded certificate file or bundle.
   Takes precedence over CACertificate and CAPath.
 - `VAULT_CAPATH`: value should be path to a directory populated with PEM-encoded certificates.
-
 - `VAULT_CAURL`: value should be URL which returns a PEM-encoded certificate or bundle as body.
   Takes precedence over CAPath.
 

@@ -35,8 +35,35 @@ var (
 	// 2: provider (AWS|GCP)
 	// 3: kubernetes_namespace
 	// 4: kubernetes_service_account
-	vaultRoleRegex = regexp.MustCompile(`([-\w]+)_([-\w]+)_([-\w]+)_([-\w]+)`)
+	//
+	// A segment cannot contain the separator: a name with an extra underscore
+	// would otherwise parse into a plausible but wrong provider rather than
+	// being rejected.
+	vaultRoleRegex = regexp.MustCompile(`^([a-zA-Z0-9-]+)_([a-zA-Z0-9-]+)_([a-zA-Z0-9-]+)_([a-zA-Z0-9-]+)$`)
 )
+
+// accountProvider returns the provider named in an account of the form
+// `<prefix>_<provider>_<namespace>_<service-account>`, and reports whether the
+// account has that shape.
+func accountProvider(account string) (string, bool) {
+	match := vaultRoleRegex.FindStringSubmatch(account)
+	if match == nil {
+		return "", false
+	}
+
+	return match[2], true
+}
+
+// mustBeSet exits when the flag a provider needs to derive its kubernetes auth
+// role or credentials from was not set.
+func mustBeSet(name, value, provider string) {
+	if value != "" {
+		return
+	}
+
+	log.Error(nil, "'"+name+"' must be set for the "+provider+" provider.")
+	os.Exit(1)
+}
 
 func usage() {
 	fmt.Printf(
@@ -106,22 +133,28 @@ func main() {
 			os.Exit(1)
 		}
 
-		if *flagSidecarVaultStaticAccount != "" {
-			sidecarProvider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultStaticAccount)[2]
-		}
-		if *flagSidecarVaultRole != "" {
-			sidecarProvider = vaultRoleRegex.FindStringSubmatch(*flagSidecarVaultRole)[2]
+		account := *flagSidecarVaultRole
+		if account == "" {
+			account = *flagSidecarVaultStaticAccount
 		}
 
-		if sidecarProvider == "github" && *flagSidecarGitHubPermissionSet == "" {
-			log.Error(nil, "'github-permission-set' must be specified for the github provider.")
-			os.Exit(1)
+		if account != "" {
+			provider, ok := accountProvider(account)
+			if !ok {
+				log.Error(nil, "'vault-role' or 'vault-static-account' must be in the format `<prefix>_<provider>_<namespace>_<service-account>`.")
+				os.Exit(1)
+			}
+			sidecarProvider = provider
 		}
 
+		// Each provider takes its kubernetes auth role from one of these flags,
+		// so each case checks the flag it uses before building anything from it.
 		var pc sidecar.ProviderConfig
 		var kubeAuthRole string
 		switch sidecarProvider {
 		case "aws":
+			mustBeSet("vault-role", *flagSidecarVaultRole, sidecarProvider)
+
 			pc = &sidecar.AWSProviderConfig{
 				Path:    "aws",
 				RoleArn: "",
@@ -129,6 +162,8 @@ func main() {
 			}
 			kubeAuthRole = *flagSidecarVaultRole
 		case "gcp":
+			mustBeSet("vault-static-account", *flagSidecarVaultStaticAccount, sidecarProvider)
+
 			keyFilePath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 			if keyFilePath == "" {
 				keyFilePath = "/gcp/sa.json"
@@ -142,6 +177,9 @@ func main() {
 			}
 			kubeAuthRole = *flagSidecarVaultStaticAccount
 		case "github":
+			mustBeSet("vault-role", *flagSidecarVaultRole, sidecarProvider)
+			mustBeSet("github-permission-set", *flagSidecarGitHubPermissionSet, sidecarProvider)
+
 			tokenFilePath := os.Getenv("GITHUB_TOKEN_FILE")
 			if tokenFilePath == "" {
 				tokenFilePath = "/var/run/secrets/github/token"
@@ -154,6 +192,13 @@ func main() {
 			}
 			kubeAuthRole = *flagSidecarVaultRole
 		default:
+			// Reached with no account at all, where usage is the answer, or with
+			// a well formed account naming a provider this binary does not have.
+			if sidecarProvider != "" {
+				log.Error(nil, "Unsupported provider: "+sidecarProvider)
+				os.Exit(1)
+			}
+
 			usage()
 			return
 		}
