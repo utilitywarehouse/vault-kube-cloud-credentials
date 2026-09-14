@@ -20,6 +20,10 @@ type GitHubProviderConfig struct {
 	TokenFileDestinationPath string
 }
 
+// tokenFileMode lets a workload read the token without running as the sidecar's
+// user, as long as the pod provides the group to its containers.
+const tokenFileMode os.FileMode = 0640
+
 // tokenPath is the vault path of the configured permission set's token.
 func (gh *GitHubProviderConfig) tokenPath() string {
 	return gh.Path + "/token/" + gh.PermissionSet
@@ -49,7 +53,7 @@ func (gh *GitHubProviderConfig) renew(ctx context.Context, client *vault.Client)
 		return -1, fmt.Errorf("no lease duration returned for %s", gh.tokenPath())
 	}
 
-	if err := writeFileAtomically(gh.TokenFileDestinationPath, []byte(token)); err != nil {
+	if err := writeFileAtomically(gh.TokenFileDestinationPath, []byte(token), tokenFileMode); err != nil {
 		return -1, fmt.Errorf("unable to save github token file: %w", err)
 	}
 
@@ -69,9 +73,8 @@ func (gh *GitHubProviderConfig) setupEndpoints(r *mux.Router) {}
 
 // writeFileAtomically writes data to a temporary file in the same directory
 // as path and renames it into place, so a concurrent reader of path never
-// observes a partially-written token. The destination is created with 0600
-// permissions, which the caller relies on for a secret.
-func writeFileAtomically(path string, data []byte) error {
+// observes a partially-written token.
+func writeFileAtomically(path string, data []byte, perm os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-"+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
@@ -88,6 +91,11 @@ func writeFileAtomically(path string, data []byte) error {
 		return err
 	}
 	if err := tmp.Close(); err != nil {
+		return err
+	}
+	// os.CreateTemp creates the file 0600, which would leave the token readable
+	// only by the sidecar's user, so widen it before the rename.
+	if err := os.Chmod(tmpPath, perm); err != nil {
 		return err
 	}
 	return os.Rename(tmpPath, path)

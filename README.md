@@ -220,6 +220,9 @@ The `github` provider reads a token from `vault-plugin-secrets-github` and write
 the file named by `GITHUB_TOKEN_FILE`, rather than serving an HTTP endpoint, because
 the tooling that consumes it expects a token value.
 
+**The pod must set `securityContext.fsGroup` for the workload to read the token file; any
+value works.**
+
 The operator creates no Vault objects for this provider, so the following have to be in
 place before the sidecar starts:
 
@@ -232,8 +235,6 @@ place before the sidecar starts:
   `/var/run/secrets/github`. The directory does not exist in the image, so the sidecar
   cannot write the token without it. It has to be mounted into the workload container as
   well
-- The workload container running as UID 1000, the user in the image, as the token file is
-  only readable by its owner
 - The workload re-reading the token file. Installation tokens expire after an hour, so a
   workload that reads the token once at startup stops working after the first expiry
 
