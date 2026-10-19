@@ -76,8 +76,12 @@ func New(config *Config) (*Sidecar, error) {
 // for the configured cloud provider
 func (s *Sidecar) Run(ctx context.Context) error {
 	loggedIn := make(chan bool, 1)
+	// reloggedIn is signalled by manageLoginToken when it replaces the login token:
+	// vault revokes the leases created by a token when it expires, so credentials
+	// fetched with the previous token are no longer valid.
+	reloggedIn := make(chan struct{}, 1)
 
-	go s.manageLoginToken(ctx, loggedIn)
+	go s.manageLoginToken(ctx, loggedIn, reloggedIn)
 
 	<-loggedIn
 
@@ -107,8 +111,15 @@ func (s *Sidecar) Run(ctx context.Context) error {
 				firstRun = false
 			}
 
-			// Sleep until its time to renew the creds
-			time.Sleep(sleepDuration(duration, rnd))
+			// Sleep until its time to renew the creds, or renew immediately if the
+			// login token was replaced
+			select {
+			case <-ctx.Done():
+				return
+			case <-reloggedIn:
+				log.Info("login token replaced, renewing credentials")
+			case <-time.After(sleepDuration(duration, rnd)):
+			}
 		}
 	}()
 

@@ -250,6 +250,10 @@ attempt to fetch a new set after about 20 minutes. A random jitter is applied
 to the refresh period to avoid tight synchronisation between multiple sidecar
 instances.
 
+Credentials are also renewed as soon as a replacement login token is issued,
+since vault revokes the leases created by the old token: without it the
+credentials it minted would be unusable until the next refresh.
+
 If the refresh fails then the sidecar will continue to make attempts at renewal,
 with an exponential backoff.
 

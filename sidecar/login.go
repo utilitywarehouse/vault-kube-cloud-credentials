@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/vault/api"
 )
 
-func (s *Sidecar) manageLoginToken(ctx context.Context, loggedIn chan bool) {
+func (s *Sidecar) manageLoginToken(ctx context.Context, loggedIn chan bool, reloggedIn chan struct{}) {
 	// Random is used for the backoff and the interval between renewal attempts
 	rnd := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
 	backoff := &Backoff{
@@ -25,6 +25,7 @@ func (s *Sidecar) manageLoginToken(ctx context.Context, loggedIn chan bool) {
 	go func() {
 		firstRun := true
 		for {
+			previousToken := clientToken(secret)
 			newSec, err := s.renewLoginToken(ctx, secret, expiresAt)
 			if err != nil {
 				promErrors.Inc()
@@ -34,6 +35,18 @@ func (s *Sidecar) manageLoginToken(ctx context.Context, loggedIn chan bool) {
 				continue
 			}
 			secret = newSec
+
+			// A replacement token means vault has revoked the leases created by the
+			// previous one, so the credentials loop must renew rather than serve those
+			// credentials until the next scheduled renewal. The initial login is
+			// skipped: it has no leases to invalidate.
+			if previousToken != "" && clientToken(secret) != previousToken {
+				select {
+				case reloggedIn <- struct{}{}:
+				default: // a renewal is already pending
+				}
+			}
+
 			backoff.Reset()
 
 			duration := time.Duration(secret.Auth.LeaseDuration) * time.Second
@@ -85,6 +98,16 @@ func (s *Sidecar) renewLoginToken(ctx context.Context, secret *api.Secret, expir
 	log.Info("login token lease renewed", "lease_expiration", expiresAt.Format("2006-01-02 15:04:05"))
 
 	return secret, nil
+}
+
+// clientToken returns the client token carried by secret, or the empty string if
+// secret has no authentication information.
+func clientToken(secret *api.Secret) string {
+	if secret == nil || secret.Auth == nil {
+		return ""
+	}
+
+	return secret.Auth.ClientToken
 }
 
 func (s *Sidecar) login(ctx context.Context) (*api.Secret, error) {
