@@ -2,6 +2,7 @@ package sidecar
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/utilitywarehouse/go-operational/op"
@@ -15,6 +16,11 @@ const (
 )
 
 var (
+	// credentialsReady flips once the provider has fetched credentials at least
+	// once. It stays latched so a later Vault outage does not make containers
+	// that are already using valid credentials unready.
+	credentialsReady atomic.Bool
+
 	promExpiry = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: prometheus.BuildFQName(promNamespace, promSubsystem, "expiry_timestamp_seconds"),
 		Help: "Returns the expiry date for the current credentials, expressed as a Unix Epoch Time",
@@ -88,6 +94,6 @@ var (
 				promVaultRequestsDuration,
 				promVaultRequestsInFlight,
 			).
-			ReadyAlways(),
+			Ready(credentialsReady.Load),
 	)
 )
