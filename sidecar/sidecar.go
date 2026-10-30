@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -171,8 +172,18 @@ func (s *Sidecar) Run(ctx context.Context) error {
 		// Block until the provider has retrieved the first set of
 		// credentials
 		<-ready
+
+		// Bind before reporting ready so readiness means the credentials
+		// endpoint accepts connections, the same guarantee as probing the port.
+		listener, err := net.Listen("tcp", s.ListenAddress)
+		if err != nil {
+			errors <- err
+			return
+		}
+
+		credentialsReady.Store(true)
 		log.Info("webserver is listening", "address", s.ListenAddress)
-		if err := providerSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := providerSrv.Serve(listener); err != nil && err != http.ErrServerClosed {
 			errors <- err
 		}
 	}()
