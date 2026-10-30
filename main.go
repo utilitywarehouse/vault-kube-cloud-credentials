@@ -18,13 +18,13 @@ var (
 	flagOperatorProvider   = operatorCommand.String("provider", "aws", "Cloud provider (one of 'aws' or 'gcp')")
 
 	sidecarCommand                 = flag.NewFlagSet("sidecar", flag.ExitOnError)
-	flagSidecarKubeTokenPath       = sidecarCommand.String("kube-token-path", "/var/run/secrets/kubernetes.io/serviceaccount/token", "Path to the kubernetes serviceaccount token")
-	flagSidecarListenAddr          = sidecarCommand.String("listen-address", "127.0.0.1:8098", "Listen address")
-	flagSidecarOpsAddr             = sidecarCommand.String("operational-address", ":8099", "Listen address for operational status endpoints")
-	flagSidecarVaultRole           = sidecarCommand.String("vault-role", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
-	flagSidecarVaultStaticAccount  = sidecarCommand.String("vault-static-account", "", "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
-	flagSidecarSecretType          = sidecarCommand.String("secret-type", "access_token", "Secret type (one of 'service_account_key' or 'access_token')")
-	flagSidecarGitHubPermissionSet = sidecarCommand.String("github-permission-set", "", "Name of the vault-plugin-secrets-github permission set to fetch a token for (github provider only)")
+	flagSidecarKubeTokenPath       = sidecarCommand.String("kube-token-path", envOr("VKCC_KUBE_TOKEN_PATH", "/var/run/secrets/kubernetes.io/serviceaccount/token"), "Path to the kubernetes serviceaccount token")
+	flagSidecarListenAddr          = sidecarCommand.String("listen-address", envOr("VKCC_LISTEN_ADDRESS", "127.0.0.1:8098"), "Listen address")
+	flagSidecarOpsAddr             = sidecarCommand.String("operational-address", envOr("VKCC_OPERATIONAL_ADDRESS", ":8099"), "Listen address for operational status endpoints")
+	flagSidecarVaultRole           = sidecarCommand.String("vault-role", os.Getenv("VKCC_VAULT_ROLE"), "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
+	flagSidecarVaultStaticAccount  = sidecarCommand.String("vault-static-account", os.Getenv("VKCC_VAULT_STATIC_ACCOUNT"), "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
+	flagSidecarSecretType          = sidecarCommand.String("secret-type", envOr("VKCC_SECRET_TYPE", "access_token"), "Secret type (one of 'service_account_key' or 'access_token')")
+	flagSidecarGitHubPermissionSet = sidecarCommand.String("github-permission-set", os.Getenv("VKCC_GITHUB_PERMISSION_SET"), "Name of the vault-plugin-secrets-github permission set to fetch a token for (github provider only)")
 
 	log = ctrl.Log.WithName("main")
 
@@ -52,6 +52,16 @@ func accountProvider(account string) (string, bool) {
 	}
 
 	return match[2], true
+}
+
+// envOr returns the environment variable named key when it is set, and
+// fallback otherwise, so the sidecar can be configured without flags.
+func envOr(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+
+	return fallback
 }
 
 // mustBeSet exits when the flag a provider needs to derive its kubernetes auth

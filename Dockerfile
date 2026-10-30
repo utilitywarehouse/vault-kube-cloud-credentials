@@ -28,3 +28,4 @@ RUN echo "default:x:1000:default" >> /etc/group
 USER 1000:1000
 
 ENTRYPOINT [ "/vault-kube-cloud-credentials" ]
+CMD [ "sidecar" ]
