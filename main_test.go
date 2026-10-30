@@ -2,6 +2,18 @@ package main
 
 import "testing"
 
+func TestEnvOr(t *testing.T) {
+	t.Setenv("VKCC_TEST_VALUE", "from-env")
+
+	if got := envOr("VKCC_TEST_VALUE", "fallback"); got != "from-env" {
+		t.Errorf("envOr() = %q, want %q", got, "from-env")
+	}
+
+	if got := envOr("VKCC_TEST_MISSING", "fallback"); got != "fallback" {
+		t.Errorf("envOr() = %q, want %q", got, "fallback")
+	}
+}
+
 // Names that do not have exactly four underscore separated segments are the
 // ones that used to slip through: the greedy segments absorbed the extra
 // underscores and the provider came out as a namespace or prefix.
