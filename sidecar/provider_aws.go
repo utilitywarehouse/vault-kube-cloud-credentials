@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -71,26 +70,35 @@ func (apc *AWSProviderConfig) renew(ctx context.Context, client *vault.Client) (
 	// Convert the secret's lease duration into a time.Duration
 	leaseDuration := time.Duration(secret.LeaseDuration) * time.Second
 
-	// Get the expiration date of the lease from vault
-	l := lease{}
-	resp, err := client.Logical().WriteRawWithContext(ctx, "sys/leases/lookup", []byte(`{"lease_id":"`+secret.LeaseID+`"}`))
+	// Get the expiration date of the lease from vault. This uses the
+	// parsed-secret call rather than a raw response: the raw helpers cancel the
+	// request context before returning, so reading the body afterwards races
+	// with that cancellation and intermittently fails with "context canceled".
+	lookup, err := client.Logical().WriteWithContext(ctx, "sys/leases/lookup", map[string]interface{}{
+		"lease_id": secret.LeaseID,
+	})
 	if err != nil {
 		return -1, err
 	}
-	err = json.NewDecoder(resp.Body).Decode(&l)
-	io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	if lookup == nil {
+		return -1, errors.New("lease lookup returned nil secret")
+	}
+	rawExpireTime, ok := lookup.Data["expire_time"].(string)
+	if !ok {
+		return -1, errors.New("lease lookup response has no expire_time")
+	}
+	expireTime, err := time.Parse(time.RFC3339Nano, rawExpireTime)
 	if err != nil {
 		return -1, err
 	}
 
-	log.Info("new aws credentials", "access_key", secret.Data["access_key"].(string), "expiration", l.Data.ExpireTime.Format("2006-01-02 15:04:05"))
+	log.Info("new aws credentials", "access_key", secret.Data["access_key"].(string), "expiration", expireTime.Format("2006-01-02 15:04:05"))
 
 	apc.creds = &AWSCredentials{
 		AccessKeyID:     secret.Data["access_key"].(string),
 		SecretAccessKey: secret.Data["secret_key"].(string),
 		Token:           secret.Data["security_token"].(string),
-		Expiration:      l.Data.ExpireTime,
+		Expiration:      expireTime,
 	}
 
 	return leaseDuration, nil
@@ -110,11 +118,4 @@ func (apc *AWSProviderConfig) setupEndpoints(r *mux.Router) {
 			return
 		}
 	})
-}
-
-// lease represents the part of the response from /v1/sys/leases/lookup we care about (the expire time)
-type lease struct {
-	Data struct {
-		ExpireTime time.Time `json:"expire_time"`
-	} `json:"data"`
 }
