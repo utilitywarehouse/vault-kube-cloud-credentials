@@ -86,11 +86,12 @@ metadata:
     vault.uw.systems/aws-role: "arn:aws:iam::000000000000:role/some-role-name,arn:aws:iam::000000000000:role/some-other-role-name"
 ```
 
-The order is preserved and the first ARN is the default role: the sidecar serves
-its credentials on `GET /credentials` without a query parameter. Empty entries
-and duplicate ARNs are rejected. Every ARN in the list has to be permitted for
-the namespace by the `aws.rules` in the config file, otherwise the
-ServiceAccount is not admitted and nothing is written to Vault.
+The order matters. By default, the sidecar serves the first ARN on
+`GET /credentials`. When `VKCC_AWS_CREDENTIALS_DIR` is set, it also writes that
+role as `[profile default]`. The operator rejects empty, invalid, and duplicate
+ARNs. It also checks every ARN against `aws.rules` for the namespace. If one
+isn't allowed, the operator doesn't admit the ServiceAccount and writes nothing
+to Vault.
 
 _GCP service account keys and access tokens have a default TTL of 1 hour._
 
@@ -234,36 +235,43 @@ applicably:
 
 ### AWS
 
-The sidecar serves AWS credentials on `GET /credentials` at its listen address
-(`127.0.0.1:8098` by default), in the JSON shape the [AWS container credentials
-provider](https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html)
-expects, so `AWS_CONTAINER_CREDENTIALS_FULL_URI=http://127.0.0.1:8098/credentials`
-keeps working. Pods using `sts-profile` get profiles only, with no HTTP endpoint.
+By default, the sidecar serves credentials on `GET /credentials` at its listen
+address (`127.0.0.1:8098` by default), in the JSON shape the [AWS container
+credentials provider](https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html)
+expects. Point `AWS_CONTAINER_CREDENTIALS_FULL_URI` at
+`http://127.0.0.1:8098/credentials` to use it.
 
-The injected sidecar listens on `127.0.0.1:8498` and sets
-`AWS_CONTAINER_CREDENTIALS_FULL_URI` for the workload containers, so the SDK
-default chain resolves the default role without any code; `127.0.0.1:8098` is
-the binary's default.
+Set `VKCC_AWS_CREDENTIALS_DIR` to a writable directory and the sidecar also
+writes one JSON file per role, plus a shared `config` file with one AWS profile
+per role. Point the workload at `<dir>/config` with `AWS_CONFIG_FILE`, then
+choose a profile with `AWS_PROFILE`. Set `-disable-http` (or
+`VKCC_DISABLE_HTTP=true`) to serve profiles only; this needs
+`VKCC_AWS_CREDENTIALS_DIR`.
 
-- **Several roles:** list more than one role ARN in the ServiceAccount annotation.
-  Separate them with a comma followed by `arn:`, so commas inside a role name are
-  fine. The first ARN is the default role (`[profile default]`); plain `sts-http`
-  pods still get only the first role over HTTP. If another role fails, the others
-  keep working.
-- **Profiles:** annotate the pod with `vault.uw.systems/aws-credentials:
-  sts-profile` and the pod gets profiles only, no HTTP credentials endpoint: the
-  first role is also `[profile default]`, and the other roles are named after the
-  last segment of their ARN. Choose one with `AWS_PROFILE`, or in Go with
-  `config.WithSharedConfigProfile("name")`.
-- **Setup:** the admission policies in
-  [system-manifests](https://github.com/utilitywarehouse/system-manifests) mount
-  the profile files, set `AWS_CONFIG_FILE` and `AWS_PROFILE=default`, and do not
-  set `AWS_CONTAINER_CREDENTIALS_FULL_URI` for these pods. `AWS_CONFIG_FILE`
-  overrides any config file the workload already has. The sidecar runs with
-  `VKCC_DISABLE_HTTP=true` (the `-disable-http` flag) and serves no HTTP
-  credentials. The files are mode `0640`, so the workload needs `fsGroup`.
-- **Requirements:** the workload image needs `sh` and `cat`. boto3 also needs
-  `AWS_DEFAULT_REGION`, and the Vault TTL should be above 25 minutes.
+- **Several roles:** list more than one ARN in the ServiceAccount annotation.
+  Put a comma between ARNs. A comma starts a new ARN only when the next part
+  begins with `arn:`, so commas inside a role name still work. The first ARN is
+  the default role: when HTTP is enabled, `GET /credentials` serves only that
+  role, and when profiles are enabled, they include every role that has
+  credentials. If a secondary role fails, the sidecar keeps serving the default
+  role and the other profiles. It retries the failed role within 3 minutes, or
+  sooner if its credentials expire, and keeps serving any previous credentials
+  until they expire.
+  Roll the operator out before the sidecar. Until its policy can read
+  `aws/roles/<name>`, the sidecar can't discover the ARNs. A role with one ARN
+  still works: the sidecar falls back to Vault's default credentials. A role
+  with several ARNs won't get credentials.
+- **Profiles:** when profiles are enabled, the first role has two profiles:
+  `default` and a profile named after the role. If the sidecar can't read the
+  role list, it creates only `default`. Each other role gets a profile named
+  after the last segment of its ARN. If two roles have the same name, the
+  sidecar adds the account ID or the role's position in the list to keep the
+  names unique.
+- **Setup:** the sidecar needs write access to `VKCC_AWS_CREDENTIALS_DIR`; the
+  workload needs read access. The files are mode `0640`, so set `fsGroup` on the
+  workload. `AWS_CONFIG_FILE` overrides any config file the workload already
+  has. The workload image needs `sh` and `cat` to run `credential_process`. If
+  you use boto3, set `AWS_DEFAULT_REGION`. Keep the Vault TTL above 25 minutes.
 
 ### GitHub
 

@@ -194,17 +194,39 @@ func freeAddress(t *testing.T) string {
 }
 
 func TestInvalidateProvider(t *testing.T) {
-	apc := &AWSProviderConfig{roleRenewAt: map[string]time.Time{primaryArn: time.Now().Add(time.Hour)}}
+	apc := &AWSProviderConfig{
+		roleStates: map[string]awsRoleState{
+			primaryArn: {renewAt: time.Now().Add(time.Hour), retryPending: true},
+		},
+	}
 
 	s := &Sidecar{Config: &Config{ProviderConfig: apc}}
 	s.invalidateProvider()
 
-	if len(apc.roleRenewAt) != 0 {
-		t.Error("invalidateProvider did not invalidate the aws provider")
+	if state := apc.roleStates[primaryArn]; !state.renewAt.IsZero() || state.retryPending {
+		t.Errorf("invalidateProvider did not invalidate the aws role state: %+v", state)
 	}
 
 	s = &Sidecar{Config: &Config{ProviderConfig: &GitHubProviderConfig{}}}
 	s.invalidateProvider()
+}
+
+func TestNextRetry(t *testing.T) {
+	apc := &AWSProviderConfig{
+		roleStates: map[string]awsRoleState{
+			primaryArn: {renewAt: time.Now().Add(time.Minute), retryPending: true},
+		},
+	}
+
+	s := &Sidecar{Config: &Config{ProviderConfig: apc}}
+	if d := s.nextRetry(); d < 59*time.Second || d > time.Minute {
+		t.Errorf("nextRetry = %v, want about a minute", d)
+	}
+
+	s = &Sidecar{Config: &Config{ProviderConfig: &GitHubProviderConfig{}}}
+	if d := s.nextRetry(); d != 0 {
+		t.Errorf("nextRetry for a provider without retries = %v, want 0", d)
+	}
 }
 
 // waitForContents polls path until it holds want, or timeout elapses.

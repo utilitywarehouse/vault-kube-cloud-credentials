@@ -113,6 +113,13 @@ func (s *Sidecar) Run(ctx context.Context) error {
 				firstRun = false
 			}
 
+			// Providers with per-role retry timers can ask for an earlier wake-up
+			// than the normal fraction of the credential lifetime.
+			wait := sleepDuration(duration, rnd)
+			if retry := s.nextRetry(); retry > 0 && retry < wait {
+				wait = retry
+			}
+
 			// Sleep until its time to renew the creds, or renew immediately if the
 			// login token was replaced
 			select {
@@ -121,7 +128,7 @@ func (s *Sidecar) Run(ctx context.Context) error {
 			case <-reloggedIn:
 				log.Info("login token replaced, renewing credentials")
 				s.invalidateProvider()
-			case <-time.After(sleepDuration(duration, rnd)):
+			case <-time.After(wait):
 			}
 		}
 	}()
@@ -236,6 +243,14 @@ func (s *Sidecar) invalidateProvider() {
 	if inv, ok := s.ProviderConfig.(interface{ invalidate() }); ok {
 		inv.invalidate()
 	}
+}
+
+func (s *Sidecar) nextRetry() time.Duration {
+	if rs, ok := s.ProviderConfig.(interface{ nextRetry() time.Duration }); ok {
+		return rs.nextRetry()
+	}
+
+	return 0
 }
 
 // reloadVaultCA updates the tls.Config used by the vault client with the CA

@@ -62,12 +62,17 @@ type AWSProviderConfig struct {
 
 	CredentialsDir string
 
-	mu          sync.RWMutex
-	creds       *AWSCredentials
-	roleCreds   map[string]*AWSCredentials
-	roleRenewAt map[string]time.Time
-	knownArns   []string
-	profiles    []string
+	mu         sync.RWMutex
+	creds      *AWSCredentials
+	roleStates map[string]awsRoleState
+	knownArns  []string
+	profiles   []string
+}
+
+type awsRoleState struct {
+	creds        *AWSCredentials
+	renewAt      time.Time
+	retryPending bool // a secondary role is waiting for its retry; renewAt is the retry time
 }
 
 type awsCredentialProcessFile struct {
@@ -86,110 +91,158 @@ func (apc *AWSProviderConfig) renew(ctx context.Context, client *vault.Client) (
 		return -1, err
 	}
 
-	if len(roleArns) < 2 {
-		creds, leaseDuration, err := apc.readCredentials(ctx, client, apc.RoleArn)
-		if err != nil {
-			return -1, err
-		}
-
-		var roleCreds map[string]*AWSCredentials
-		if len(roleArns) == 1 {
-			roleCreds = map[string]*AWSCredentials{roleArns[0]: creds}
-		}
-
-		apc.mu.Lock()
-		apc.creds = creds
-		apc.roleCreds = roleCreds
-		apc.mu.Unlock()
-
-		apc.publishCredentials(roleArns, roleCreds)
-
-		return leaseDuration, nil
+	if len(roleArns) == 0 {
+		// Old operator policy: no ARNs are discoverable, but Vault can still
+		// return its default credentials when no role_arn is requested.
+		roleArns = []string{""}
 	}
 
 	now := time.Now()
 
 	apc.mu.RLock()
-	previousCreds := apc.roleCreds
-	previousRenewAt := apc.roleRenewAt
+	previous := apc.roleStates
 	apc.mu.RUnlock()
 
-	creds := make(map[string]*AWSCredentials, len(roleArns))
-	renewAt := make(map[string]time.Time, len(roleArns))
+	// Build a fresh snapshot for the current role list; the previous map stays untouched.
+	next := make(map[string]awsRoleState, len(roleArns))
 
-	var (
-		firstErr      error
-		leaseDuration time.Duration
-		haveCreds     bool
-	)
+	var firstErr error
 
 	for i, roleArn := range roleArns {
-		if at := previousRenewAt[roleArn]; now.Before(at) {
-			creds[roleArn] = previousCreds[roleArn]
-			renewAt[roleArn] = at
-		} else if c, d, err := apc.readCredentials(ctx, client, roleArn); err != nil {
-			log.Error(err, "error renewing aws credentials for role arn", "role_arn", roleArn)
-			promErrors.Inc()
-			renewAt[roleArn] = now.Add(failedRoleRetryInterval)
-
-			if previous := previousCreds[roleArn]; previous != nil && previous.Expiration.After(now) {
-				creds[roleArn] = previous
-			}
-
-			if i == 0 {
-				firstErr = err
-			}
-		} else {
-			creds[roleArn] = c
-			renewAt[roleArn] = now.Add(d / 4)
+		state, err := apc.renewRole(ctx, client, roleArn, previous[roleArn], i == 0, now)
+		next[roleArn] = state
+		if i == 0 {
+			firstErr = err
 		}
+	}
 
-		if c := creds[roleArn]; c != nil {
-			if d := c.Expiration.Sub(now); !haveCreds || d < leaseDuration {
-				leaseDuration, haveCreds = d, true
-			}
+	if firstErr == nil && next[roleArns[0]].creds == nil {
+		firstErr = fmt.Errorf("no credentials for default role arn %s", roleArns[0])
+	}
+
+	apc.mu.Lock()
+	apc.creds = next[roleArns[0]].creds
+	apc.roleStates = next
+	apc.mu.Unlock()
+
+	if err := apc.writeCredentialFiles(roleArns, next); err != nil {
+		firstErr = errors.Join(firstErr, err)
+	}
+
+	return earliestExpiry(next, now), firstErr
+}
+
+func (apc *AWSProviderConfig) renewRole(ctx context.Context, client *vault.Client, roleArn string, prevState awsRoleState, isDefault bool, now time.Time) (awsRoleState, error) {
+	if isDefault && prevState.retryPending {
+		// A role that was a failed secondary may have become the default.
+		// Default retries are paced by Run, not by the secondary timer.
+		prevState.retryPending = false
+		prevState.renewAt = time.Time{}
+	}
+
+	kept := prevState.creds
+	if kept != nil && !kept.Expiration.After(now) {
+		kept = nil
+	}
+
+	// Reuse a credential that is still within its schedule. A failed secondary
+	// keeps retryPending so nextRetry can wake Run; a healthy role clears it.
+	if now.Before(prevState.renewAt) && (kept != nil || prevState.retryPending) {
+		return awsRoleState{creds: kept, renewAt: prevState.renewAt, retryPending: prevState.retryPending}, nil
+	}
+
+	c, d, err := apc.readCredentials(ctx, client, roleArn)
+	if err == nil {
+		return awsRoleState{creds: c, renewAt: now.Add(d / 4)}, nil
+	}
+
+	if isDefault {
+		// Let Run's retry loop decide when to try the default again.
+		return awsRoleState{creds: kept}, err
+	}
+
+	log.Error(err, "error renewing aws credentials for role arn", "role_arn", roleArn)
+	promErrors.Inc()
+
+	retry := now.Add(failedRoleRetryInterval)
+	if kept != nil && kept.Expiration.Before(retry) {
+		retry = kept.Expiration
+	}
+
+	return awsRoleState{creds: kept, renewAt: retry, retryPending: true}, nil
+}
+
+func earliestExpiry(roleStates map[string]awsRoleState, now time.Time) time.Duration {
+	var leaseDuration time.Duration
+	haveCreds := false
+
+	for _, state := range roleStates {
+		if state.creds == nil {
+			continue
+		}
+		if d := state.creds.Expiration.Sub(now); !haveCreds || d < leaseDuration {
+			leaseDuration, haveCreds = d, true
 		}
 	}
 
 	if leaseDuration < minRoleRenewInterval {
-		leaseDuration = minRoleRenewInterval
+		return minRoleRenewInterval
 	}
 
-	apc.mu.Lock()
-	apc.creds = creds[roleArns[0]]
-	apc.roleCreds = creds
-	apc.roleRenewAt = renewAt
-	apc.mu.Unlock()
-
-	apc.publishCredentials(roleArns, creds)
-
-	return leaseDuration, firstErr
+	return leaseDuration
 }
 
 func (apc *AWSProviderConfig) invalidate() {
 	apc.mu.Lock()
-	apc.roleRenewAt = nil
+	// Replace rather than mutate: renew may still be holding the previous map
+	// while it builds the next snapshot.
+	next := make(map[string]awsRoleState, len(apc.roleStates))
+	for roleArn, state := range apc.roleStates {
+		state.renewAt = time.Time{}
+		state.retryPending = false
+		next[roleArn] = state
+	}
+	apc.roleStates = next
 	apc.mu.Unlock()
 }
 
-func (apc *AWSProviderConfig) publishCredentials(roleArns []string, creds map[string]*AWSCredentials) {
-	if apc.CredentialsDir == "" || len(roleArns) == 0 {
-		return
+// nextRetry returns the time until the earliest failed role should be tried
+// again. It is zero when no role is waiting for a retry.
+func (apc *AWSProviderConfig) nextRetry() time.Duration {
+	apc.mu.RLock()
+	defer apc.mu.RUnlock()
+
+	var next time.Time
+	for _, state := range apc.roleStates {
+		if !state.retryPending {
+			continue
+		}
+		if next.IsZero() || state.renewAt.Before(next) {
+			next = state.renewAt
+		}
 	}
 
-	if err := apc.writeCredentialFiles(roleArns, creds); err != nil {
-		log.Error(err, "error writing aws credential files", "dir", apc.CredentialsDir)
-		promErrors.Inc()
+	if next.IsZero() {
+		return 0
 	}
+	if d := time.Until(next); d > 0 {
+		return d
+	}
+
+	return 0
 }
 
-func (apc *AWSProviderConfig) writeCredentialFiles(roleArns []string, creds map[string]*AWSCredentials) error {
+func (apc *AWSProviderConfig) writeCredentialFiles(roleArns []string, roleStates map[string]awsRoleState) error {
+	if apc.CredentialsDir == "" {
+		return nil
+	}
+
 	names := awsProfileNames(roleArns)
 
 	current := make([]string, 0, len(roleArns))
 	defaultProfile := ""
 	for i, roleArn := range roleArns {
-		c := creds[roleArn]
+		c := roleStates[roleArn].creds
 		if c == nil {
 			continue
 		}
@@ -199,7 +252,7 @@ func (apc *AWSProviderConfig) writeCredentialFiles(roleArns []string, creds map[
 			return err
 		}
 
-		if i == 0 {
+		if i == 0 && name != "default" {
 			defaultProfile = name
 		}
 
@@ -213,6 +266,10 @@ func (apc *AWSProviderConfig) writeCredentialFiles(roleArns []string, creds map[
 		return err
 	}
 
+	return apc.removeStaleProfiles(current)
+}
+
+func (apc *AWSProviderConfig) removeStaleProfiles(current []string) error {
 	apc.mu.RLock()
 	previous := apc.profiles
 	apc.mu.RUnlock()
@@ -262,6 +319,10 @@ func awsCredentialsConfig(dir, defaultProfile string, profiles []string) []byte 
 }
 
 func awsProfileNames(roleArns []string) map[string]string {
+	if len(roleArns) == 1 && roleArns[0] == "" {
+		return map[string]string{"": "default"}
+	}
+
 	counts := make(map[string]int, len(roleArns))
 	for _, roleArn := range roleArns {
 		name, _ := awsRoleProfile(roleArn)
