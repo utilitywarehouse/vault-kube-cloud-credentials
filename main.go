@@ -21,6 +21,7 @@ var (
 	flagSidecarKubeTokenPath       = sidecarCommand.String("kube-token-path", envOr("VKCC_KUBE_TOKEN_PATH", "/var/run/secrets/kubernetes.io/serviceaccount/token"), "Path to the kubernetes serviceaccount token")
 	flagSidecarListenAddr          = sidecarCommand.String("listen-address", envOr("VKCC_LISTEN_ADDRESS", "127.0.0.1:8098"), "Listen address")
 	flagSidecarOpsAddr             = sidecarCommand.String("operational-address", envOr("VKCC_OPERATIONAL_ADDRESS", ":8099"), "Listen address for operational status endpoints")
+	flagSidecarDisableHTTP         = sidecarCommand.Bool("disable-http", envBool("VKCC_DISABLE_HTTP"), "Do not serve credentials over HTTP (aws provider with VKCC_AWS_CREDENTIALS_DIR only)")
 	flagSidecarVaultRole           = sidecarCommand.String("vault-role", os.Getenv("VKCC_VAULT_ROLE"), "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
 	flagSidecarVaultStaticAccount  = sidecarCommand.String("vault-static-account", os.Getenv("VKCC_VAULT_STATIC_ACCOUNT"), "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
 	flagSidecarSecretType          = sidecarCommand.String("secret-type", envOr("VKCC_SECRET_TYPE", "access_token"), "Secret type (one of 'service_account_key' or 'access_token')")
@@ -62,6 +63,10 @@ func envOr(key, fallback string) string {
 	}
 
 	return fallback
+}
+
+func envBool(key string) bool {
+	return envOr(key, "false") == "true"
 }
 
 // mustBeSet exits when the flag a provider needs to derive its kubernetes auth
@@ -166,9 +171,10 @@ func main() {
 			mustBeSet("vault-role", *flagSidecarVaultRole, sidecarProvider)
 
 			pc = &sidecar.AWSProviderConfig{
-				Path:    "aws",
-				RoleArn: "",
-				Role:    *flagSidecarVaultRole,
+				Path:           "aws",
+				RoleArn:        "",
+				Role:           *flagSidecarVaultRole,
+				CredentialsDir: os.Getenv("VKCC_AWS_CREDENTIALS_DIR"),
 			}
 			kubeAuthRole = *flagSidecarVaultRole
 		case "gcp":
@@ -213,6 +219,17 @@ func main() {
 			return
 		}
 
+		if *flagSidecarDisableHTTP {
+			if sidecarProvider != "aws" {
+				log.Error(nil, "'disable-http' requires the aws provider.")
+				os.Exit(1)
+			}
+			if os.Getenv("VKCC_AWS_CREDENTIALS_DIR") == "" {
+				log.Error(nil, "'disable-http' requires 'VKCC_AWS_CREDENTIALS_DIR'.")
+				os.Exit(1)
+			}
+		}
+
 		sidecarConfig := &sidecar.Config{
 			KubeAuthPath:   "kubernetes",
 			KubeAuthRole:   kubeAuthRole,
@@ -220,6 +237,7 @@ func main() {
 			OpsAddress:     *flagSidecarOpsAddr,
 			ProviderConfig: pc,
 			TokenPath:      *flagSidecarKubeTokenPath,
+			DisableHTTP:    *flagSidecarDisableHTTP,
 		}
 
 		s, err := sidecar.New(sidecarConfig)

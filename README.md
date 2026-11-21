@@ -74,6 +74,25 @@ this value should be lower then `maxLeaseTTL` of vault or `max_lease_ttl` on AWS
 
 _if custom TTL is set then make sure `max_session_duration` is updated in assume Role policy for the role if required, as it defaults to `1h`._
 
+The annotation accepts a comma separated list of ARNs, so one ServiceAccount
+can map to several IAM roles:
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: foobar
+  annotations:
+    vault.uw.systems/aws-role: "arn:aws:iam::000000000000:role/some-role-name,arn:aws:iam::000000000000:role/some-other-role-name"
+```
+
+The order matters. By default, the sidecar serves the first ARN on
+`GET /credentials`. When `VKCC_AWS_CREDENTIALS_DIR` is set, it also writes that
+role as `[profile default]`. The operator rejects empty, invalid, and duplicate
+ARNs. It also checks every ARN against `aws.rules` for the namespace. If one
+isn't allowed, the operator doesn't admit the ServiceAccount and writes nothing
+to Vault.
+
 _GCP service account keys and access tokens have a default TTL of 1 hour._
 
 GCP kube serviceAccount example:
@@ -213,6 +232,46 @@ applicably:
 
 - `VAULT_ADDR`: the address of the Vault server (default: `https://127.0.0.1:8200`)
 - `VAULT_CACERT`: path to a CA certificate file used to verify the Vault server's certificate
+
+### AWS
+
+By default, the sidecar serves credentials on `GET /credentials` at its listen
+address (`127.0.0.1:8098` by default), in the JSON shape the [AWS container
+credentials provider](https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html)
+expects. Point `AWS_CONTAINER_CREDENTIALS_FULL_URI` at
+`http://127.0.0.1:8098/credentials` to use it.
+
+Set `VKCC_AWS_CREDENTIALS_DIR` to a writable directory and the sidecar also
+writes one JSON file per role, plus a shared `config` file with one AWS profile
+per role. Point the workload at `<dir>/config` with `AWS_CONFIG_FILE`, then
+choose a profile with `AWS_PROFILE`. Set `-disable-http` (or
+`VKCC_DISABLE_HTTP=true`) to serve profiles only; this needs
+`VKCC_AWS_CREDENTIALS_DIR`.
+
+- **Several roles:** list more than one ARN in the ServiceAccount annotation.
+  Put a comma between ARNs. A comma starts a new ARN only when the next part
+  begins with `arn:`, so commas inside a role name still work. The first ARN is
+  the default role: when HTTP is enabled, `GET /credentials` serves only that
+  role, and when profiles are enabled, they include every role that has
+  credentials. If a secondary role fails, the sidecar keeps serving the default
+  role and the other profiles. It retries the failed role within 3 minutes, or
+  sooner if its credentials expire, and keeps serving any previous credentials
+  until they expire.
+  Roll the operator out before the sidecar. Until its policy can read
+  `aws/roles/<name>`, the sidecar can't discover the ARNs. A role with one ARN
+  still works: the sidecar falls back to Vault's default credentials. A role
+  with several ARNs won't get credentials.
+- **Profiles:** when profiles are enabled, the first role has two profiles:
+  `default` and a profile named after the role. If the sidecar can't read the
+  role list, it creates only `default`. Each other role gets a profile named
+  after the last segment of its ARN. If two roles have the same name, the
+  sidecar adds the account ID or the role's position in the list to keep the
+  names unique.
+- **Setup:** the sidecar needs write access to `VKCC_AWS_CREDENTIALS_DIR`; the
+  workload needs read access. The files are mode `0640`, so set `fsGroup` on the
+  workload. `AWS_CONFIG_FILE` overrides any config file the workload already
+  has. The workload image needs `sh` and `cat` to run `credential_process`. If
+  you use boto3, set `AWS_DEFAULT_REGION`. Keep the Vault TTL above 25 minutes.
 
 ### GitHub
 

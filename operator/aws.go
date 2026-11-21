@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 	"time"
@@ -19,12 +20,17 @@ const (
 	maxSTSTTLDuration       = 12 * time.Hour
 )
 
+var awsRoleARNPattern = regexp.MustCompile(`^arn:aws:iam::[0-9]{12}:role/[a-zA-Z0-9_+=,.@/-]+$`)
+
 var awsPolicyTemplate = `
 path "{{ .Path }}/creds/{{ .Name }}" {
   capabilities = ["create", "read", "update", "delete", "list"]
 }
 path "{{ .Path }}/sts/{{ .Name }}" {
   capabilities = ["create", "read", "update", "delete", "list"]
+}
+path "{{ .Path }}/roles/{{ .Name }}" {
+  capabilities = ["read"]
 }
 `
 
@@ -121,9 +127,14 @@ func (a *AWS) secretPayload(serviceAccount *corev1.ServiceAccount) (map[string]i
 		return nil, fmt.Errorf("unable to set secret ttl err: %w", err)
 	}
 
+	roleArns, err := parseRoleARNs(serviceAccount.Annotations[awsRoleAnnotation])
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse role arns err: %w", err)
+	}
+
 	return map[string]interface{}{
 		"default_sts_ttl": int(secretTTL.Seconds()),
-		"role_arns":       []string{serviceAccount.Annotations[awsRoleAnnotation]},
+		"role_arns":       roleArns,
 		"credential_type": "assumed_role",
 
 		// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
@@ -150,8 +161,53 @@ func (a *AWS) renderPolicyTemplate(name string) (string, error) {
 	return policy.String(), nil
 }
 
-func (a *AWS) allow(namespace, roleArn string) (bool, error) {
-	return a.Rules.allow(namespace, roleArn)
+func (a *AWS) allow(namespace, roleArns string) (bool, error) {
+	arns, err := parseRoleARNs(roleArns)
+	if err != nil {
+		return false, err
+	}
+
+	for _, roleArn := range arns {
+		if allowed, err := a.Rules.allow(namespace, roleArn); err != nil || !allowed {
+			return false, err
+		}
+	}
+
+	return true, nil
+}
+
+func parseRoleARNs(roleArns string) ([]string, error) {
+	parts := strings.Split(roleArns, ",")
+
+	parsed := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if strings.TrimSpace(p) == "" {
+			return nil, fmt.Errorf("empty role arn in %q", roleArns)
+		}
+
+		if len(parsed) == 0 || strings.HasPrefix(strings.TrimSpace(p), "arn:") {
+			parsed = append(parsed, p)
+			continue
+		}
+
+		parsed[len(parsed)-1] += "," + p
+	}
+
+	seen := make(map[string]struct{}, len(parsed))
+	for i, p := range parsed {
+		p = strings.TrimSpace(p)
+		if !awsRoleARNPattern.MatchString(p) {
+			return nil, fmt.Errorf("invalid role arn %q", p)
+		}
+		if _, ok := seen[p]; ok {
+			return nil, fmt.Errorf("duplicate role arn %q", p)
+		}
+
+		seen[p] = struct{}{}
+		parsed[i] = p
+	}
+
+	return parsed, nil
 }
 
 // allow returns true if there is a rule in the list of rules which allows
