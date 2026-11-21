@@ -207,8 +207,9 @@ func (apc *AWSProviderConfig) invalidate() {
 }
 
 // nextRetry returns the time until the earliest failed role should be tried
-// again. It is zero when no role is waiting for a retry.
-func (apc *AWSProviderConfig) nextRetry() time.Duration {
+// again, and whether a retry is pending. When a retry is overdue the duration
+// is zero and the bool is true.
+func (apc *AWSProviderConfig) nextRetry() (time.Duration, bool) {
 	apc.mu.RLock()
 	defer apc.mu.RUnlock()
 
@@ -223,13 +224,10 @@ func (apc *AWSProviderConfig) nextRetry() time.Duration {
 	}
 
 	if next.IsZero() {
-		return 0
-	}
-	if d := time.Until(next); d > 0 {
-		return d
+		return 0, false
 	}
 
-	return 0
+	return max(time.Until(next), 0), true
 }
 
 func (apc *AWSProviderConfig) writeCredentialFiles(roleArns []string, roleStates map[string]awsRoleState) error {

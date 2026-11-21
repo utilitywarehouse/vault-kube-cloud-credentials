@@ -219,12 +219,35 @@ func TestNextRetry(t *testing.T) {
 	}
 
 	s := &Sidecar{Config: &Config{ProviderConfig: apc}}
-	if d := s.nextRetry(); d < 59*time.Second || d > time.Minute {
+	d, ok := s.nextRetry()
+	if !ok {
+		t.Error("nextRetry ok = false, want true")
+	}
+	if d < 59*time.Second || d > time.Minute {
 		t.Errorf("nextRetry = %v, want about a minute", d)
 	}
 
+	apc = &AWSProviderConfig{
+		roleStates: map[string]awsRoleState{
+			primaryArn: {renewAt: time.Now().Add(-time.Second), retryPending: true},
+		},
+	}
+
+	s = &Sidecar{Config: &Config{ProviderConfig: apc}}
+	d, ok = s.nextRetry()
+	if !ok {
+		t.Error("nextRetry ok = false for an overdue retry, want true")
+	}
+	if d != 0 {
+		t.Errorf("nextRetry for an overdue retry = %v, want 0", d)
+	}
+
 	s = &Sidecar{Config: &Config{ProviderConfig: &GitHubProviderConfig{}}}
-	if d := s.nextRetry(); d != 0 {
+	d, ok = s.nextRetry()
+	if ok {
+		t.Error("nextRetry ok = true for a provider without retries, want false")
+	}
+	if d != 0 {
 		t.Errorf("nextRetry for a provider without retries = %v, want 0", d)
 	}
 }

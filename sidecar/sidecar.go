@@ -116,7 +116,7 @@ func (s *Sidecar) Run(ctx context.Context) error {
 			// Providers with per-role retry timers can ask for an earlier wake-up
 			// than the normal fraction of the credential lifetime.
 			wait := sleepDuration(duration, rnd)
-			if retry := s.nextRetry(); retry > 0 && retry < wait {
+			if retry, ok := s.nextRetry(); ok && retry < wait {
 				wait = retry
 			}
 
@@ -245,12 +245,12 @@ func (s *Sidecar) invalidateProvider() {
 	}
 }
 
-func (s *Sidecar) nextRetry() time.Duration {
-	if rs, ok := s.ProviderConfig.(interface{ nextRetry() time.Duration }); ok {
+func (s *Sidecar) nextRetry() (time.Duration, bool) {
+	if rs, ok := s.ProviderConfig.(interface{ nextRetry() (time.Duration, bool) }); ok {
 		return rs.nextRetry()
 	}
 
-	return 0
+	return 0, false
 }
 
 // reloadVaultCA updates the tls.Config used by the vault client with the CA

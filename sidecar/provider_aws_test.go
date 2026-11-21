@@ -425,8 +425,8 @@ func TestAWSRenewDefaultFailureDoesNotBecomeReady(t *testing.T) {
 	}
 	apc.mu.RUnlock()
 
-	if retry := apc.nextRetry(); retry != 0 {
-		t.Errorf("next retry = %v, want 0: the default role is paced by Run", retry)
+	if retry, ok := apc.nextRetry(); ok || retry != 0 {
+		t.Errorf("next retry = %v, ok = %v, want 0, false: the default role is paced by Run", retry, ok)
 	}
 
 	f.setFailRole(primaryArn, false)
@@ -445,8 +445,8 @@ func TestAWSRenewDefaultFailureDoesNotBecomeReady(t *testing.T) {
 	if creds.AccessKeyID != "AKprimary" {
 		t.Errorf("default access key = %q, want %q", creds.AccessKeyID, "AKprimary")
 	}
-	if retry := apc.nextRetry(); retry != 0 {
-		t.Errorf("next retry = %v, want 0 after recovery", retry)
+	if retry, ok := apc.nextRetry(); ok || retry != 0 {
+		t.Errorf("next retry = %v, ok = %v, want 0, false after recovery", retry, ok)
 	}
 }
 
@@ -563,8 +563,8 @@ func TestAWSRenewSingleRoleClearsRetryState(t *testing.T) {
 		t.Fatalf("renew with a failing secondary role: %v", err)
 	}
 
-	if retry := apc.nextRetry(); retry == 0 {
-		t.Fatal("next retry = 0, want a retry for the failed secondary role")
+	if retry, ok := apc.nextRetry(); !ok || retry == 0 {
+		t.Fatal("next retry = 0, false, want a retry for the failed secondary role")
 	}
 
 	// If vault later reports only one role, the retry timer for the removed
@@ -577,8 +577,8 @@ func TestAWSRenewSingleRoleClearsRetryState(t *testing.T) {
 		t.Fatalf("renew after switching to a single role: %v", err)
 	}
 
-	if retry := apc.nextRetry(); retry != 0 {
-		t.Errorf("next retry after switching to a single role = %v, want 0", retry)
+	if retry, ok := apc.nextRetry(); ok || retry != 0 {
+		t.Errorf("next retry after switching to a single role = %v, ok = %v, want 0, false", retry, ok)
 	}
 }
 
@@ -650,8 +650,8 @@ func TestAWSRenewMultiRole(t *testing.T) {
 		t.Errorf("secondary renew at = %v, want about %v ahead", secondaryState.renewAt, failedRoleRetryInterval)
 	}
 
-	if retry := apc.nextRetry(); retry < failedRoleRetryInterval-5*time.Second || retry > failedRoleRetryInterval {
-		t.Errorf("next retry = %v, want about %v", retry, failedRoleRetryInterval)
+	if retry, ok := apc.nextRetry(); !ok || retry < failedRoleRetryInterval-5*time.Second || retry > failedRoleRetryInterval {
+		t.Errorf("next retry = %v, ok = %v, want about %v", retry, ok, failedRoleRetryInterval)
 	}
 
 	if _, err := apc.renew(ctx, client); err != nil {
@@ -748,7 +748,9 @@ func TestAWSPublishCredentialFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apc.writeCredentialFiles([]string{secondaryArn, primaryArn}, creds)
+	if err := apc.writeCredentialFiles([]string{secondaryArn, primaryArn}, creds); err != nil {
+		t.Fatalf("writeCredentialFiles: %v", err)
+	}
 
 	wantConfig := fmt.Sprintf("[profile default]\ncredential_process = cat %[1]s/secondary.json\n\n[profile primary]\ncredential_process = cat %[1]s/primary.json\n\n[profile secondary]\ncredential_process = cat %[1]s/secondary.json\n", dir)
 	config, err := os.ReadFile(filepath.Join(dir, "config"))
@@ -782,7 +784,9 @@ func TestAWSPublishCredentialFiles(t *testing.T) {
 		t.Errorf("primary.json = %+v", file)
 	}
 
-	apc.writeCredentialFiles([]string{primaryArn}, creds)
+	if err := apc.writeCredentialFiles([]string{primaryArn}, creds); err != nil {
+		t.Fatalf("writeCredentialFiles: %v", err)
+	}
 
 	if _, err := os.Stat(filepath.Join(dir, "secondary.json")); !os.IsNotExist(err) {
 		t.Errorf("secondary.json was not removed: %v", err)
@@ -794,9 +798,11 @@ func TestAWSPublishCredentialFiles(t *testing.T) {
 	dir = t.TempDir()
 	apc = &AWSProviderConfig{Path: "aws", Role: "test-role", CredentialsDir: dir}
 
-	apc.writeCredentialFiles([]string{primaryArn, secondaryArn}, map[string]awsRoleState{
+	if err := apc.writeCredentialFiles([]string{primaryArn, secondaryArn}, map[string]awsRoleState{
 		secondaryArn: {creds: &AWSCredentials{AccessKeyID: "AKSECONDARY", SecretAccessKey: "secret", Token: "token", Expiration: time.Now().Add(time.Hour)}},
-	})
+	}); err != nil {
+		t.Fatalf("writeCredentialFiles: %v", err)
+	}
 
 	wantNoDefault := fmt.Sprintf("[profile secondary]\ncredential_process = cat %s/secondary.json\n", dir)
 	config, err = os.ReadFile(filepath.Join(dir, "config"))
