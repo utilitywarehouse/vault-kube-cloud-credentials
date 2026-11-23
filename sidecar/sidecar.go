@@ -27,6 +27,7 @@ type Config struct {
 	ListenAddress  string
 	OpsAddress     string
 	TokenPath      string
+	DisableHTTP    bool
 }
 
 // Sidecar provides the basic functionality for retrieving credentials using the
@@ -112,6 +113,13 @@ func (s *Sidecar) Run(ctx context.Context) error {
 				firstRun = false
 			}
 
+			// Providers with per-role retry timers can ask for an earlier wake-up
+			// than the normal fraction of the credential lifetime.
+			wait := sleepDuration(duration, rnd)
+			if retry, ok := s.nextRetry(); ok && retry < wait {
+				wait = retry
+			}
+
 			// Sleep until its time to renew the creds, or renew immediately if the
 			// login token was replaced
 			select {
@@ -119,7 +127,8 @@ func (s *Sidecar) Run(ctx context.Context) error {
 				return
 			case <-reloggedIn:
 				log.Info("login token replaced, renewing credentials")
-			case <-time.After(sleepDuration(duration, rnd)):
+				s.invalidateProvider()
+			case <-time.After(wait):
 			}
 		}
 	}()
@@ -145,33 +154,41 @@ func (s *Sidecar) Run(ctx context.Context) error {
 	}()
 
 	// Serve provider endpoints
-	providerSrv := &http.Server{
-		Addr:         s.ListenAddress,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  5 * time.Second,
-	}
-	r := mux.NewRouter()
-	s.ProviderConfig.setupEndpoints(r)
+	var providerSrv *http.Server
+	if !s.DisableHTTP {
+		providerSrv = &http.Server{
+			Addr:         s.ListenAddress,
+			ReadTimeout:  5 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			IdleTimeout:  5 * time.Second,
+		}
+		r := mux.NewRouter()
+		s.ProviderConfig.setupEndpoints(r)
 
-	// Instrument the handler with logging and metrics
-	ir := instrumentHandlerLogging(
-		promhttp.InstrumentHandlerInFlight(promRequestsInFlight,
-			promhttp.InstrumentHandlerDuration(promRequestsDuration,
-				promhttp.InstrumentHandlerCounter(promRequests,
-					promhttp.InstrumentHandlerResponseSize(promResponseSize,
-						promhttp.InstrumentHandlerRequestSize(promRequestSize, r),
+		// Instrument the handler with logging and metrics
+		ir := instrumentHandlerLogging(
+			promhttp.InstrumentHandlerInFlight(promRequestsInFlight,
+				promhttp.InstrumentHandlerDuration(promRequestsDuration,
+					promhttp.InstrumentHandlerCounter(promRequests,
+						promhttp.InstrumentHandlerResponseSize(promResponseSize,
+							promhttp.InstrumentHandlerRequestSize(promRequestSize, r),
+						),
 					),
 				),
 			),
-		),
-	)
-	providerSrv.Handler = ir
+		)
+		providerSrv.Handler = ir
+	}
 
 	go func() {
 		// Block until the provider has retrieved the first set of
 		// credentials
 		<-ready
+
+		if s.DisableHTTP {
+			credentialsReady.Store(true)
+			return
+		}
 
 		// Bind before reporting ready so readiness means the credentials
 		// endpoint accepts connections, the same guarantee as probing the port.
@@ -194,10 +211,12 @@ func (s *Sidecar) Run(ctx context.Context) error {
 	case <-ctx.Done():
 		log.Info("shutting down ...")
 
-		ctxWto1, cancelWto1 := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancelWto1()
-		if err := providerSrv.Shutdown(ctxWto1); err != nil {
-			return err
+		if providerSrv != nil {
+			ctxWto1, cancelWto1 := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancelWto1()
+			if err := providerSrv.Shutdown(ctxWto1); err != nil {
+				return err
+			}
 		}
 
 		ctxWto2, cancelWto2 := context.WithTimeout(context.Background(), 30*time.Second)
@@ -218,6 +237,20 @@ func (s *Sidecar) renew(ctx context.Context) (time.Duration, error) {
 
 	// Renew credentials for the provider
 	return s.ProviderConfig.renew(ctx, s.vaultClient)
+}
+
+func (s *Sidecar) invalidateProvider() {
+	if inv, ok := s.ProviderConfig.(interface{ invalidate() }); ok {
+		inv.invalidate()
+	}
+}
+
+func (s *Sidecar) nextRetry() (time.Duration, bool) {
+	if rs, ok := s.ProviderConfig.(interface{ nextRetry() (time.Duration, bool) }); ok {
+		return rs.nextRetry()
+	}
+
+	return 0, false
 }
 
 // reloadVaultCA updates the tls.Config used by the vault client with the CA
