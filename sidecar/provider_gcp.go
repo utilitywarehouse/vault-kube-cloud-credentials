@@ -183,7 +183,7 @@ func (gpc *GCPProviderConfig) newKey(ctx context.Context, client *vault.Client) 
 	}
 
 	// Save the service account json key in a file
-	err = os.WriteFile(gpc.KeyFileDestinationPath, []byte(privateKeyDecoded), 0600)
+	err = os.WriteFile(gpc.KeyFileDestinationPath, []byte(privateKeyDecoded), payloadFileMode)
 	if err != nil {
 		return -1, fmt.Errorf("unable to save google service account key file err:%w", err)
 	}

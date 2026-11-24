@@ -66,8 +66,8 @@ func TestGitHubRenewWritesTokenFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
 	}
-	if mode := info.Mode().Perm(); mode != tokenFileMode {
-		t.Errorf("token file mode = %o, want %o", mode, tokenFileMode)
+	if mode := info.Mode().Perm(); mode != payloadFileMode {
+		t.Errorf("token file mode = %o, want %o", mode, payloadFileMode)
 	}
 
 	entries, err := os.ReadDir(filepath.Dir(tokenPath))
@@ -164,7 +164,7 @@ func TestGitHubRenewRejectsMissingSecret(t *testing.T) {
 func TestWriteFileAtomicallyMissingDirectory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing", "token")
 
-	if err := writeFileAtomically(path, []byte("gh-token"), tokenFileMode); err == nil {
+	if err := writeFileAtomically(path, []byte("gh-token"), payloadFileMode); err == nil {
 		t.Error("writeFileAtomically did not return an error for a missing directory")
 	}
 }

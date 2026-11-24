@@ -767,8 +767,8 @@ func TestAWSPublishCredentialFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("published %s credentials: %v", name, err)
 		}
-		if info.Mode().Perm() != tokenFileMode {
-			t.Errorf("%s.json mode = %o, want %o", name, info.Mode().Perm(), tokenFileMode)
+		if info.Mode().Perm() != payloadFileMode {
+			t.Errorf("%s.json mode = %o, want %o", name, info.Mode().Perm(), payloadFileMode)
 		}
 	}
 
