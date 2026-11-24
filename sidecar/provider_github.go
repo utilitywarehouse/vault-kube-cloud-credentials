@@ -20,9 +20,12 @@ type GitHubProviderConfig struct {
 	TokenFileDestinationPath string
 }
 
-// tokenFileMode lets a workload read the token without running as the sidecar's
-// user, as long as the pod provides the group to its containers.
-const tokenFileMode os.FileMode = 0640
+// payloadFileMode makes a written file readable by every container in the pod.
+// This is the same reach as 0640 plus fsGroup: fsGroup adds its group to every
+// container in the pod, and files written after the mount inherit it. The
+// volume is pod-local either way, so 0644 does not widen access and saves the
+// workload from setting fsGroup when it runs as another user.
+const payloadFileMode os.FileMode = 0644
 
 // tokenPath is the vault path of the configured permission set's token.
 func (gh *GitHubProviderConfig) tokenPath() string {
@@ -53,7 +56,7 @@ func (gh *GitHubProviderConfig) renew(ctx context.Context, client *vault.Client)
 		return -1, fmt.Errorf("no lease duration returned for %s", gh.tokenPath())
 	}
 
-	if err := writeFileAtomically(gh.TokenFileDestinationPath, []byte(token), tokenFileMode); err != nil {
+	if err := writeFileAtomically(gh.TokenFileDestinationPath, []byte(token), payloadFileMode); err != nil {
 		return -1, fmt.Errorf("unable to save github token file: %w", err)
 	}
 

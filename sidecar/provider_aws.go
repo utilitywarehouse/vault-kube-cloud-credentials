@@ -260,7 +260,7 @@ func (apc *AWSProviderConfig) writeCredentialFiles(roleArns []string, roleStates
 	sort.Strings(current)
 
 	config := awsCredentialsConfig(apc.CredentialsDir, defaultProfile, current)
-	if err := writeFileAtomically(filepath.Join(apc.CredentialsDir, "config"), config, tokenFileMode); err != nil {
+	if err := writeFileAtomically(filepath.Join(apc.CredentialsDir, "config"), config, payloadFileMode); err != nil {
 		return err
 	}
 
@@ -301,7 +301,7 @@ func writeCredentialFile(path string, creds *AWSCredentials) error {
 		return err
 	}
 
-	return writeFileAtomically(path, data, tokenFileMode)
+	return writeFileAtomically(path, data, payloadFileMode)
 }
 
 func awsCredentialsConfig(dir, defaultProfile string, profiles []string) []byte {
