@@ -14,9 +14,9 @@ func TestEnvOr(t *testing.T) {
 	}
 }
 
-// Names that do not have exactly four underscore separated segments are the
-// ones that used to slip through: the greedy segments absorbed the extra
-// underscores and the provider came out as a namespace or prefix.
+// Only the first two segments are structural: the provider is pinned so a
+// name cannot parse into a wrong provider, while the namespace and service
+// account (or GitHub permission set) may contain underscores.
 func TestAccountProvider(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -43,20 +43,44 @@ func TestAccountProvider(t *testing.T) {
 			ok:      true,
 		},
 		{
-			name:    "extra segment",
+			name:    "underscore in service account",
 			account: "prod_github_myns_myapp_2",
+			want:    "github",
+			ok:      true,
 		},
 		{
-			name:    "extra segments",
+			name:    "multiple underscores in service account",
 			account: "prod_github_myns_myapp_extra_more",
+			want:    "github",
+			ok:      true,
 		},
 		{
 			name:    "underscore in namespace",
 			account: "prod_github_my_ns_app",
+			want:    "github",
+			ok:      true,
 		},
 		{
-			name:    "too few segments",
+			name:    "github permission set with underscore",
+			account: "k8s_github_uw_ro_k8s",
+			want:    "github",
+			ok:      true,
+		},
+		{
+			name:    "github permission set without underscore",
+			account: "k8s_github_readonly",
+			want:    "github",
+			ok:      true,
+		},
+		{
+			name:    "short account name",
 			account: "prod_aws_myns",
+			want:    "aws",
+			ok:      true,
+		},
+		{
+			name:    "wrong provider position",
+			account: "prod_myns_github_myapp",
 		},
 		{
 			name:    "no prefix",
