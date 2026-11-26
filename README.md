@@ -216,7 +216,7 @@ Supported providers (secret engines):
     -secret-type=access_token
 # GitHub
 ./vault-kube-cloud-credentials sidecar \
-    -vault-role=<prefix>_github_<namespace>_<serviceaccount> \
+    -vault-role=<prefix>_github_<permission-set> \
     -github-permission-set=<permission-set>
 ```
 

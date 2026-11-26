@@ -22,7 +22,7 @@ var (
 	flagSidecarListenAddr          = sidecarCommand.String("listen-address", envOr("VKCC_LISTEN_ADDRESS", "127.0.0.1:8098"), "Listen address")
 	flagSidecarOpsAddr             = sidecarCommand.String("operational-address", envOr("VKCC_OPERATIONAL_ADDRESS", ":8099"), "Listen address for operational status endpoints")
 	flagSidecarDisableHTTP         = sidecarCommand.Bool("disable-http", envBool("VKCC_DISABLE_HTTP"), "Do not serve credentials over HTTP (aws provider with VKCC_AWS_CREDENTIALS_DIR only)")
-	flagSidecarVaultRole           = sidecarCommand.String("vault-role", os.Getenv("VKCC_VAULT_ROLE"), "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
+	flagSidecarVaultRole           = sidecarCommand.String("vault-role", os.Getenv("VKCC_VAULT_ROLE"), "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>` (github: `<prefix>_github_<permission-set>`)")
 	flagSidecarVaultStaticAccount  = sidecarCommand.String("vault-static-account", os.Getenv("VKCC_VAULT_STATIC_ACCOUNT"), "Must be in the format: `<prefix>_<provider>_<namespace>_<service-account>`")
 	flagSidecarSecretType          = sidecarCommand.String("secret-type", envOr("VKCC_SECRET_TYPE", "access_token"), "Secret type (one of 'service_account_key' or 'access_token')")
 	flagSidecarGitHubPermissionSet = sidecarCommand.String("github-permission-set", os.Getenv("VKCC_GITHUB_PERMISSION_SET"), "Name of the vault-plugin-secrets-github permission set to fetch a token for (github provider only)")
@@ -31,21 +31,20 @@ var (
 
 	// example: exp-1_aws_sys-prom_thanos-compact
 	//
-	// 0: exp-1_aws_sys-prom_thanos-compact
 	// 1: prefix (Vault instance) example values: "exp-1", "dev", "prod"
-	// 2: provider (AWS|GCP)
-	// 3: kubernetes_namespace
-	// 4: kubernetes_service_account
+	// 2: provider (aws|gcp|github)
+	// 3: `<namespace>_<service-account>` for aws/gcp, the permission set for
+	//    github; these may contain underscores (for example uw_ro_k8s)
 	//
-	// A segment cannot contain the separator: a name with an extra underscore
-	// would otherwise parse into a plausible but wrong provider rather than
-	// being rejected.
-	vaultRoleRegex = regexp.MustCompile(`^([a-zA-Z0-9-]+)_([a-zA-Z0-9-]+)_([a-zA-Z0-9-]+)_([a-zA-Z0-9-]+)$`)
+	// The provider is pinned as the second segment so a name with extra
+	// underscores cannot parse into a plausible but wrong provider.
+	vaultRoleRegex = regexp.MustCompile(`^([a-zA-Z0-9-]+)_(aws|gcp|github)_([a-zA-Z0-9_-]+)$`)
 )
 
 // accountProvider returns the provider named in an account of the form
-// `<prefix>_<provider>_<namespace>_<service-account>`, and reports whether the
-// account has that shape.
+// `<prefix>_<provider>_<namespace>_<service-account>`; the namespace and
+// service account may contain underscores (a GitHub permission set such as
+// uw_ro_k8s arrives in the same shape).
 func accountProvider(account string) (string, bool) {
 	match := vaultRoleRegex.FindStringSubmatch(account)
 	if match == nil {
@@ -156,7 +155,7 @@ func main() {
 		if account != "" {
 			provider, ok := accountProvider(account)
 			if !ok {
-				log.Error(nil, "'vault-role' or 'vault-static-account' must be in the format `<prefix>_<provider>_<namespace>_<service-account>`.")
+				log.Error(nil, "'vault-role' or 'vault-static-account' must be in the format `<prefix>_<provider>_<namespace>_<service-account>` (github: `<prefix>_github_<permission-set>`).")
 				os.Exit(1)
 			}
 			sidecarProvider = provider
